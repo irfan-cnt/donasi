@@ -17,3 +17,11 @@ Seed dijalankan `pnpm db:seed` (idempoten, upsert by unique key). Production han
 - 12 berita.
 - 40 donor (10 dengan akun), 300 transaksi lintas status, payment + events sintetis.
 - Data memakai nama fiktif dan domain `example.com`, nomor `+628000000xxxx`.
+
+## Implementasi (T-06)
+- Perintah: `pnpm db:seed` (= `--reference`), `pnpm db:seed:sample` (referensi + contoh; ditolak bila `APP_ENV=production`). Seluruh seed berjalan dalam satu transaksi DB.
+- Idempotensi referensi = **insert-if-missing** (`ON CONFLICT DO NOTHING`) agar perubahan admin (aktivasi metode/provider, isi template, nilai settings) tidak ditimpa saat seed diulang. Pengecualian: `roles.is_system` dan `permissions.description` di-update. `role_permissions` hanya ditambah, tidak dihapus. Template dicek per (event, channel) karena unique index hanya berlaku untuk template aktif.
+- Contoh deterministik: PRNG ber-seed + tanggal jangkar tetap (1 Nov 2026); kunci stabil = slug campaign, (campaign, slug) berita, email donor/user, kode transaksi, `provider_ref = sample-<kode>`, `provider_event_id = sample-<kode>-<n>`. Slug campaign contoh berawalan `contoh-`.
+- Status transaksi contoh: paid 180, pending 30, created 15 (tanpa payment), expired 40, failed 15, cancelled 15, refunded 5. Satu payment per transaksi (non-`created`); payment pending diberi `expires_at` = waktu seed + 24 jam.
+- `collected_amount`/`donor_count` campaign contoh dihitung ulang dari transaksi `paid` (jumlah & banyaknya transaksi, sesuai `donor_count += 1` di payment-architecture) dalam transaksi DB yang sama. Kuitansi `KW/YYYY/NNNNNN` diberikan ke transaksi paid contoh dan `receipt_counters` dinaikkan (`GREATEST`).
+- `pnpm admin:create --email <email> --name <nama> --role <owner|admin|finance|editor>`: argumen divalidasi Zod, password acak 20 karakter (CSPRNG) hanya dicetak ke terminal, hash argon2id (`@node-rs/argon2`, m=19456, t=2, p=1), `must_change_password=true`, audit log `admin.create` (actor `system`).
