@@ -1,12 +1,12 @@
 import "server-only";
 import { Client, Receiver } from "@upstash/qstash";
-import { getEnv } from "@/lib/env";
+import { getEnv, requireEnvValue } from "@/lib/env";
 
 let client: Client | undefined;
 let receiver: Receiver | undefined;
 
 export function getQStash(): Client {
-  client ??= new Client({ token: getEnv().QSTASH_TOKEN });
+  client ??= new Client({ token: requireEnvValue(getEnv(), "QSTASH_TOKEN") });
   return client;
 }
 
@@ -38,8 +38,8 @@ export async function verifyQStashSignature(
   if (!signature) return false;
   const env = getEnv();
   receiver ??= new Receiver({
-    currentSigningKey: env.QSTASH_CURRENT_SIGNING_KEY,
-    nextSigningKey: env.QSTASH_NEXT_SIGNING_KEY,
+    currentSigningKey: requireEnvValue(env, "QSTASH_CURRENT_SIGNING_KEY"),
+    nextSigningKey: requireEnvValue(env, "QSTASH_NEXT_SIGNING_KEY"),
   });
   try {
     return await receiver.verify({ signature, body: rawBody, url });

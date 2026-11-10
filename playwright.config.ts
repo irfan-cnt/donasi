@@ -21,5 +21,7 @@ export default defineConfig({
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
+        // Redirect Auth.js (mis. logout) harus ke server uji, bukan AUTH_URL dari .env.local.
+        env: { AUTH_URL: baseURL },
       },
 });

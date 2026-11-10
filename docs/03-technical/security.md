@@ -16,6 +16,7 @@
 
 ## 2. Autentikasi
 - **Donor:** Auth.js v5 Google, sesi database, cookie `__Secure-` `HttpOnly; Secure; SameSite=Lax`; `email_verified` wajib; `callbackUrl` hanya path relatif.
+  - Implementasi (P04): `src/lib/auth/index.ts` (Auth.js + `requireDonor()`), sanitizer murni `src/lib/auth/callback-url.ts` (dipakai di form, server action, dan callback `redirect` Auth.js), `src/proxy.ts` hanya cek keberadaan cookie untuk `/akun/**`. Cookie: `__Secure-authjs.session-token` bila `AUTH_URL` https (`authjs.session-token` di http localhost). Env Google wajib saat `APP_ENV=production`.
 - **Admin:** email + argon2id (m=19456, t=2, p=1), TOTP wajib untuk owner (disarankan semua), lockout 5 gagal/15 menit, sesi `__Host-tk_admin` (`SameSite=Strict`), idle 30 menit, absolut 8 jam, rotasi ID sesi setelah login, tabel `admin_sessions` dengan hash token (SHA-256). Reset password hanya oleh owner + paksa ganti.
 
 ## 3. Otorisasi

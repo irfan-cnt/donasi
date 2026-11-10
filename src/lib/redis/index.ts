@@ -1,14 +1,17 @@
 import "server-only";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
-import { getEnv } from "@/lib/env";
+import { getEnv, requireEnvValue } from "@/lib/env";
 
 let redis: Redis | undefined;
 
 export function getRedis(): Redis {
   if (!redis) {
     const env = getEnv();
-    redis = new Redis({ url: env.UPSTASH_REDIS_REST_URL, token: env.UPSTASH_REDIS_REST_TOKEN });
+    redis = new Redis({
+      url: requireEnvValue(env, "UPSTASH_REDIS_REST_URL"),
+      token: requireEnvValue(env, "UPSTASH_REDIS_REST_TOKEN"),
+    });
   }
   return redis;
 }

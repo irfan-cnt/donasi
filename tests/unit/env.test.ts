@@ -45,3 +45,50 @@ describe("env schema", () => {
     expect(() => getEnv()).not.toThrow();
   });
 });
+
+describe("env schema — auth Google (P04)", () => {
+  it("boleh kosong di development", () => {
+    const env = parseServerEnv({ ...valid, APP_ENV: "development", AUTH_GOOGLE_ID: "" });
+    expect(env.AUTH_GOOGLE_ID).toBeUndefined();
+  });
+
+  it("wajib & https di production", () => {
+    expect(() => parseServerEnv({ ...valid, APP_ENV: "production" })).toThrow(
+      /AUTH_URL.*AUTH_GOOGLE_ID.*AUTH_GOOGLE_SECRET/,
+    );
+    expect(() =>
+      parseServerEnv({
+        ...valid,
+        APP_ENV: "production",
+        AUTH_URL: "http://example.org",
+        AUTH_GOOGLE_ID: "id",
+        AUTH_GOOGLE_SECRET: "s",
+      }),
+    ).toThrow(/AUTH_URL: harus https/);
+    expect(
+      parseServerEnv({
+        ...valid,
+        APP_ENV: "production",
+        AUTH_URL: "https://example.org",
+        AUTH_GOOGLE_ID: "id",
+        AUTH_GOOGLE_SECRET: "s",
+      }).APP_ENV,
+    ).toBe("production");
+  });
+});
+
+describe("env schema — Upstash/QStash", () => {
+  const withoutUpstash = { ...valid, UPSTASH_REDIS_REST_URL: undefined, QSTASH_TOKEN: undefined };
+
+  it("boleh kosong di development, requireEnvValue gagal dengan nama variabel", async () => {
+    const env = parseServerEnv({ ...withoutUpstash, APP_ENV: "development" });
+    const { requireEnvValue } = await import("@/lib/env");
+    expect(() => requireEnvValue(env, "QSTASH_TOKEN")).toThrow("Env QSTASH_TOKEN belum diisi");
+  });
+
+  it("wajib di preview", () => {
+    expect(() => parseServerEnv({ ...withoutUpstash, APP_ENV: "preview" })).toThrow(
+      /UPSTASH_REDIS_REST_URL.*QSTASH_TOKEN/,
+    );
+  });
+});
