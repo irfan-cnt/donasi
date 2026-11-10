@@ -8,7 +8,7 @@ import { getDb } from "@/lib/db";
 import { accounts, sessions, users, verificationTokens } from "@/lib/db/schema";
 import { getEnv } from "@/lib/env";
 import { logger } from "@/lib/logger";
-import { findDonorByUserId } from "@/server/repositories/donor-repository";
+import { findDonorByUserId, type DonorRow } from "@/server/repositories/donor-repository";
 import { ensureDonorAccount, normalizeEmail } from "@/server/services/donor-account-service";
 import { DEFAULT_DONOR_CALLBACK, sanitizeCallbackUrl } from "./callback-url";
 
@@ -107,4 +107,18 @@ export async function requireDonor(
     }));
   if (!donor) redirect(loginUrl);
   return { userId, donorId: donor.id, email: donor.email, name: donor.name };
+}
+
+/**
+ * Donor dari sesi bila ada (tanpa redirect) — untuk halaman publik seperti checkout (AC-04.7).
+ * Membuat baris donor bila belum ada, sama seperti requireDonor().
+ */
+export async function getOptionalDonor(): Promise<DonorRow | null> {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) return null;
+  const donor =
+    (await findDonorByUserId(userId)) ??
+    (await ensureDonorAccount({ id: userId, email: session.user?.email, name: session.user?.name }));
+  return donor ?? null;
 }

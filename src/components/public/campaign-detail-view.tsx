@@ -45,8 +45,7 @@ export function DonateButton({
     );
   }
   return (
-    // Checkout dibuat di P08; prefetch dimatikan sampai route ada.
-    <Link href={donateHref(slug)} prefetch={false} className={cls}>
+    <Link href={donateHref(slug)} className={cls}>
       {label}
       <ChevronRight className="size-5" aria-hidden />
     </Link>

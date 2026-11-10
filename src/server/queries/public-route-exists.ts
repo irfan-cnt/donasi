@@ -1,7 +1,7 @@
 import "server-only";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { campaignNews, campaigns } from "@/lib/db/schema";
+import { campaignNews, campaigns, transactions } from "@/lib/db/schema";
 
 // Cek keberadaan untuk src/proxy.ts: dengan cacheComponents, notFound() di halaman terjadi setelah
 // shell mulai di-stream (status 200 + noindex). Agar draft/archived/slug salah benar-benar 404,
@@ -65,6 +65,31 @@ export async function previewCampaignExists(slug: string, campaignId: string): P
         eq(campaigns.slug, slug),
         eq(campaigns.id, campaignId),
         sql`${campaigns.status} <> 'archived'`,
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * Halaman pembayaran: kode + hash access token cocok, belum kedaluwarsa, dan campaign sesuai
+ * slug. Tanpa memo (token per transaksi). Hash dihitung pemanggil — token mentah tidak disimpan.
+ */
+export async function transactionAccessExists(
+  slug: string,
+  code: string,
+  tokenHash: Buffer,
+): Promise<boolean> {
+  const rows = await getDb()
+    .select({ one: sql<number>`1` })
+    .from(transactions)
+    .innerJoin(campaigns, eq(transactions.campaignId, campaigns.id))
+    .where(
+      and(
+        eq(transactions.code, code),
+        eq(transactions.accessTokenHash, tokenHash),
+        gt(transactions.accessTokenExpiresAt, new Date()),
+        eq(campaigns.slug, slug),
       ),
     )
     .limit(1);

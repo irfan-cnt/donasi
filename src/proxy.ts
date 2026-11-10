@@ -1,11 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { logger } from "@/lib/logger";
+import { sha256 } from "@/lib/security/crypto";
 import { readCampaignPreviewToken } from "@/lib/security/preview-token";
 import { normalizeSlug } from "@/lib/slug";
+import { isTransactionCode } from "@/lib/transaction-code";
 import {
   previewCampaignExists,
   publicCampaignExists,
   publicNewsExists,
+  transactionAccessExists,
 } from "@/server/queries/public-route-exists";
 
 // Lapisan pertama saja (optimistic): cek keberadaan cookie sesi. Validasi sesi sebenarnya
@@ -73,8 +76,36 @@ async function campaignExistenceGate(request: NextRequest) {
   }
 }
 
+// Checkout & pembayaran (P08): slug draft/archived/tidak ada → 404; halaman pembayaran hanya
+// dengan kode transaksi + access token sah (selain itu 404, tidak membocorkan keberadaan).
+async function donationGate(request: NextRequest) {
+  const match = /^\/donasi\/([^/]+)(\/pembayaran)?\/?$/.exec(request.nextUrl.pathname);
+  if (!match) return NextResponse.next();
+  const slug = normalizeSlug(match[1]!);
+  if (!slug || slug !== match[1]) return notFoundResponse(request);
+  try {
+    let exists: boolean;
+    if (match[2]) {
+      const code = request.nextUrl.searchParams.get("trx") ?? "";
+      const token = request.nextUrl.searchParams.get("t") ?? "";
+      exists =
+        isTransactionCode(code) &&
+        /^[A-Za-z0-9_-]{43}$/.test(token) &&
+        (await transactionAccessExists(slug, code, sha256(token)));
+    } else {
+      exists = await publicCampaignExists(slug);
+    }
+    return exists ? NextResponse.next() : notFoundResponse(request);
+  } catch (error) {
+    // Fail-open: halaman memvalidasi ulang dan memanggil notFound() sendiri.
+    logger.warn("cek rute donasi gagal; fail-open", { error: String(error) });
+    return NextResponse.next();
+  }
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  if (pathname.startsWith("/donasi/")) return donationGate(request);
   if (pathname.startsWith("/campaign/")) {
     return canonicalCampaignRedirect(request) ?? campaignExistenceGate(request);
   }
@@ -87,4 +118,4 @@ export async function proxy(request: NextRequest) {
   return hasDonor ? NextResponse.next() : redirectTo(request, "/masuk", true);
 }
 
-export const config = { matcher: ["/campaign/:path+", "/akun", "/akun/:path*", "/admin", "/admin/:path*"] };
+export const config = { matcher: ["/campaign/:path+", "/donasi/:path+", "/akun", "/akun/:path*", "/admin", "/admin/:path*"] };
