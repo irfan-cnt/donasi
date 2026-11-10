@@ -260,3 +260,10 @@ CREATE TABLE platform_settings (
   updated_by uuid REFERENCES admin_users(id), updated_at timestamptz NOT NULL DEFAULT now()
 );
 ```
+
+## Catatan implementasi (P02)
+
+- `notification_logs.template_id` memakai `ON DELETE SET NULL` sesuai `relationships.md` (DDL di atas tidak menyebut aksi; relationships.md menjadi acuan).
+- FK yang di `relationships.md` bertanda RESTRICT (kategori→campaign, provider→method, method→payment, provider→event, opsi nominal→transaksi) ditulis eksplisit `ON DELETE RESTRICT`; FK tanpa aksi tetap `NO ACTION`.
+- Constraint CHECK/UNIQUE diberi nama eksplisit (`<tabel>_<kolom>_check`, `..._key`) agar error mudah dipetakan di aplikasi; `published_requires_image` tetap.
+- Ekstensi `citext` dan `pg_trgm` dibuat di migrasi manual `drizzle/0000_extensions.sql` (sebelum tabel). Partial index dan CHECK seluruhnya terekspresikan oleh builder Drizzle — tidak perlu SQL manual tambahan.
