@@ -17,6 +17,7 @@ const DEPLOYED_REQUIRED = [
   "QSTASH_TOKEN",
   "QSTASH_CURRENT_SIGNING_KEY",
   "QSTASH_NEXT_SIGNING_KEY",
+  "APP_ENCRYPTION_KEY",
 ] as const;
 
 /** Ambil env opsional yang dibutuhkan fitur tertentu; error berisi NAMA variabel saja. */
@@ -54,8 +55,13 @@ export const serverEnvSchema = z
     QSTASH_NEXT_SIGNING_KEY: optionalString,
     AUTH_SECRET: z.string().min(32, "AUTH_SECRET minimal 32 karakter"),
 
+    // AES-256-GCM (totp_secret admin): base64 dari 32 byte. Wajib di preview/production.
+    APP_ENCRYPTION_KEY: optionalString.refine(
+      (v) => v === undefined || Buffer.from(v, "base64").length === 32,
+      "harus base64 dari 32 byte",
+    ),
+
     // Dipakai fitur berikutnya; menjadi wajib saat fiturnya diimplementasikan.
-    APP_ENCRYPTION_KEY: optionalString,
     AUTH_URL: optionalString,
     AUTH_GOOGLE_ID: optionalString,
     AUTH_GOOGLE_SECRET: optionalString,

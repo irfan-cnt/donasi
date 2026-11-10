@@ -10,6 +10,7 @@ const valid = {
   QSTASH_CURRENT_SIGNING_KEY: "k1",
   QSTASH_NEXT_SIGNING_KEY: "k2",
   AUTH_SECRET: "x".repeat(32),
+  APP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
 };
 
 describe("env schema", () => {
@@ -90,5 +91,25 @@ describe("env schema — Upstash/QStash", () => {
     expect(() => parseServerEnv({ ...withoutUpstash, APP_ENV: "preview" })).toThrow(
       /UPSTASH_REDIS_REST_URL.*QSTASH_TOKEN/,
     );
+  });
+});
+
+describe("env schema — APP_ENCRYPTION_KEY (P05)", () => {
+  it("boleh kosong di development, wajib di preview/production", () => {
+    expect(parseServerEnv({ ...valid, APP_ENCRYPTION_KEY: "" }).APP_ENCRYPTION_KEY).toBeUndefined();
+    expect(() => parseServerEnv({ ...valid, APP_ENV: "preview", APP_ENCRYPTION_KEY: "" })).toThrow(
+      /APP_ENCRYPTION_KEY: wajib/,
+    );
+  });
+
+  it("menolak kunci yang bukan 32 byte tanpa membocorkan nilainya", () => {
+    const bad = Buffer.alloc(16, 1).toString("base64");
+    try {
+      parseServerEnv({ ...valid, APP_ENCRYPTION_KEY: bad });
+      expect.unreachable();
+    } catch (e) {
+      expect(String(e)).toMatch(/APP_ENCRYPTION_KEY: harus base64 dari 32 byte/);
+      expect(String(e)).not.toContain(bad);
+    }
   });
 });

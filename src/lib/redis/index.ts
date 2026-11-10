@@ -35,12 +35,42 @@ export function getRateLimiter(name: string, limit: number, window: Window): Rat
   return limiter;
 }
 
+// Fallback in-memory KHUSUS APP_ENV=development tanpa Upstash (fixed window per proses).
+// Tidak pernah dipakai di preview/production: di sana env Upstash wajib (env.ts).
+const memoryHits = new Map<string, { count: number; reset: number }>();
+
+function windowMs(window: Window): number {
+  const [n, unit] = window.split(" ") as [string, "s" | "m" | "h" | "d"];
+  const mult = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 }[unit];
+  return Number(n) * mult;
+}
+
+function memoryLimit(key: string, limit: number, window: Window, now = Date.now()) {
+  let entry = memoryHits.get(key);
+  if (!entry || entry.reset <= now) {
+    entry = { count: 0, reset: now + windowMs(window) };
+    memoryHits.set(key, entry);
+  }
+  entry.count += 1;
+  return {
+    success: entry.count <= limit,
+    remaining: Math.max(0, limit - entry.count),
+    reset: entry.reset,
+  };
+}
+
+function shouldUseMemoryFallback(): boolean {
+  const env = getEnv();
+  return env.APP_ENV === "development" && !env.UPSTASH_REDIS_REST_URL;
+}
+
 export async function rateLimit(
   name: string,
   identifier: string,
   limit: number,
   window: Window,
 ): Promise<{ success: boolean; remaining: number; reset: number }> {
+  if (shouldUseMemoryFallback()) return memoryLimit(`${name}:${identifier}`, limit, window);
   const { success, remaining, reset } = await getRateLimiter(name, limit, window).limit(identifier);
   return { success, remaining, reset };
 }
