@@ -16,8 +16,12 @@ export async function publishJob(
   body: unknown,
   options: { delaySeconds?: number; deduplicationId?: string; retries?: number } = {},
 ): Promise<string> {
+  const env = getEnv();
+  // Preview dilindungi Vercel Deployment Protection: teruskan header bypass (tidak pernah di production).
+  const bypass = env.APP_ENV === "preview" ? env.VERCEL_AUTOMATION_BYPASS_SECRET : undefined;
   const res = await getQStash().publishJSON({
     url,
+    headers: bypass ? { "x-vercel-protection-bypass": bypass } : undefined,
     body,
     delay: options.delaySeconds,
     deduplicationId: options.deduplicationId,

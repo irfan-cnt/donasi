@@ -62,11 +62,25 @@ async function main() {
     return;
   }
 
+  // Preview dilindungi Vercel Deployment Protection: schedule membawa header bypass (nilai tidak dicetak).
+  const bypass =
+    appEnv === "preview" ? process.env.VERCEL_AUTOMATION_BYPASS_SECRET || undefined : undefined;
+  if (appEnv === "preview")
+    console.log(`Header bypass Vercel: ${bypass ? "ya" : "TIDAK (job akan 401)"}`);
+
   const client = new Client({ token });
   const existing = new Map((await client.schedules.list()).map((s) => [s.scheduleId, s]));
   for (const p of plan) {
     const cur = existing.get(p.scheduleId);
-    const same = cur && cur.destination === p.destination && cur.cron === p.cron;
+    const hasBypass = Boolean(
+      cur?.header &&
+      Object.keys(cur.header).some((h) => h.toLowerCase().endsWith("x-vercel-protection-bypass")),
+    );
+    const same =
+      cur &&
+      cur.destination === p.destination &&
+      cur.cron === p.cron &&
+      hasBypass === Boolean(bypass);
     const action = same ? "ok" : cur ? "update" : "create";
     if (cur && !same && new URL(cur.destination).host !== url.host && !FORCE) {
       throw new Error(
@@ -80,7 +94,10 @@ async function main() {
       destination: p.destination,
       cron: p.cron,
       body: "{}",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(bypass ? { "x-vercel-protection-bypass": bypass } : {}),
+      },
       retries: 3,
     });
   }

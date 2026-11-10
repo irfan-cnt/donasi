@@ -71,6 +71,8 @@ export const serverEnvSchema = z
     MIDTRANS_CLIENT_KEY: optionalString,
     MIDTRANS_IS_PRODUCTION: booleanFlag,
     MIDTRANS_NOTIFICATION_URL_OVERRIDE: optionalString,
+    // P15: Vercel Deployment Protection bypass; hanya diteruskan ke job QStash saat APP_ENV=preview.
+    VERCEL_AUTOMATION_BYPASS_SECRET: optionalString,
     GMAIL_USER: optionalString,
     GMAIL_APP_PASSWORD: optionalString,
     EMAIL_FROM: optionalString,
@@ -113,7 +115,9 @@ export const serverEnvSchema = z
           path: ["MIDTRANS_NOTIFICATION_URL_OVERRIDE"],
           message: "tidak boleh diisi di production",
         });
-      } else if (!z.url({ protocol: /^https$/ }).safeParse(env.MIDTRANS_NOTIFICATION_URL_OVERRIDE).success) {
+      } else if (
+        !z.url({ protocol: /^https$/ }).safeParse(env.MIDTRANS_NOTIFICATION_URL_OVERRIDE).success
+      ) {
         ctx.addIssue({
           code: "custom",
           path: ["MIDTRANS_NOTIFICATION_URL_OVERRIDE"],
