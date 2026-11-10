@@ -20,6 +20,8 @@ export interface CreatePaymentInput {
   method: { code: string; type: MethodType; providerChannel: string };
   customer: { name: string; email: string; phone?: string };
   description: string;
+  /** Id item (campaign id) untuk item_details provider; fallback transactionCode. */
+  campaignId?: string;
   expiresInMinutes: number;
   /** Hanya untuk UX, bukan bukti bayar (BR-18). */
   successRedirectUrl: string;
@@ -33,6 +35,9 @@ export interface PaymentInstruction {
   qrImageUrl?: string;
   paymentUrl?: string;
   paymentCode?: string;
+  /** Mandiri Bill (echannel): kode perusahaan & kode bayar. */
+  billerCode?: string;
+  billKey?: string;
   expiresAt: Date;
   /** Ter-redaksi. */
   raw?: Record<string, unknown>;
@@ -49,6 +54,8 @@ export interface StatusResult {
   status: PaymentStatus;
   paidAmount?: bigint;
   paidAt?: Date;
+  /** capture + fraud_status challenge: tetap pending, butuh review manual. */
+  needsReview?: boolean;
   raw: unknown;
 }
 
@@ -58,6 +65,8 @@ export interface VerifiedWebhook {
   orderId: string;
   status: PaymentStatus;
   amount: bigint;
+  paidAt?: Date;
+  needsReview?: boolean;
   raw: unknown;
 }
 

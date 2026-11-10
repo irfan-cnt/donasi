@@ -1,0 +1,1 @@
+{"status_code":"400","status_message":"One or more parameters in the payload is invalid.","validation_messages":["transaction_details.gross_amount is not equal to the sum of item_details"],"id":"x"}

@@ -15,12 +15,13 @@ describe("registry provider", () => {
     expect(getProvider("midtrans", env)).toBeNull();
   });
 
-  it("adapter Midtrans belum ada (P10) → tetap tidak tersedia walau env lengkap", () => {
+  it("env sandbox lengkap → adapter Midtrans tersedia", () => {
     const env = parseServerEnv({
       ...baseEnv,
       MIDTRANS_SERVER_KEY: "SB-Mid-server-test",
       MIDTRANS_CLIENT_KEY: "SB-Mid-client-test",
     });
-    expect(getProvider("midtrans", env)).toBeNull();
+    expect(isProviderConfigured("midtrans", env)).toBe(true);
+    expect(getProvider("midtrans", env)?.code).toBe("midtrans");
   });
 });

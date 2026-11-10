@@ -1,12 +1,13 @@
 import "server-only";
 import { getEnv, type ServerEnv } from "@/lib/env";
+import { createMidtransFromEnv } from "./midtrans";
 import type { PaymentProvider, ProviderCode } from "./types";
 
 interface ProviderEntry {
   /** Env kredensial lengkap? (tanpa membaca/mengembalikan nilainya). */
   hasCredentials(env: ServerEnv): boolean;
   /**
-   * Factory adapter. `null` = adapter belum diimplementasikan (Midtrans: P10) → provider
+   * Factory adapter. `null` = adapter belum diimplementasikan → provider
    * dianggap tidak terkonfigurasi. Tidak ada adapter palsu di src (BR-18).
    */
   create: ((env: ServerEnv) => PaymentProvider) | null;
@@ -15,7 +16,7 @@ interface ProviderEntry {
 const REGISTRY: Record<ProviderCode, ProviderEntry> = {
   midtrans: {
     hasCredentials: (env) => !!env.MIDTRANS_SERVER_KEY && !!env.MIDTRANS_CLIENT_KEY,
-    create: null,
+    create: createMidtransFromEnv,
   },
 };
 

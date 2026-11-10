@@ -35,6 +35,8 @@ export const applyVerifiedStatusInput = z.object({
   /** payment_events.id milik event yang sedang diproses (webhook) bila ada. */
   eventId: z.uuid().nullable(),
   providerRef: z.string().min(1).max(200).nullish(),
+  /** Provider menandai butuh review manual (Midtrans capture+challenge, refund). */
+  needsReview: z.boolean().optional(),
 });
 export type ApplyVerifiedStatusInput = z.input<typeof applyVerifiedStatusInput>;
 
@@ -43,7 +45,12 @@ export type ApplyOutcome =
 
 /** Alert internal admin; dikirim pemanggil SETELAH commit (hook notifikasi P16). */
 export interface PaymentAlert {
-  kind: "amount_mismatch" | "paid_after_terminal" | "unknown_payment";
+  kind:
+    | "amount_mismatch"
+    | "paid_after_terminal"
+    | "unknown_payment"
+    | "refund_reported"
+    | "needs_review";
   paymentId: string;
   transactionId: string | null;
   expectedAmount: bigint | null;
@@ -138,6 +145,40 @@ export async function applyVerifiedStatus(
     transactionId: p.transaction_id,
   };
 
+  // 1b) Refund hanya boleh diterapkan lewat cek admin (M1: reversal total belum ada).
+  //     Dari sumber lain → dicatat sebagai anomali + alert, status tidak berubah.
+  if (input.status === "refunded" && input.source !== "admin_check") {
+    const alert: PaymentAlert = {
+      kind: "refund_reported",
+      paymentId: p.id,
+      transactionId: p.transaction_id,
+      expectedAmount: expected,
+      reportedAmount: input.amount,
+      reportedStatus: input.status,
+      source: input.source,
+    };
+    await markEvent(tx, input, p, "ignored_transition", "refund butuh review admin");
+    await writeAnomalyAudit(tx, "payment.needs_review", p.id, alert);
+    plog.error("payment: refund dilaporkan (needs_review)", { from: p.status });
+    return { ...result, outcome: "ignored_transition", alert };
+  }
+
+  // 1c) Pending yang ditandai review (capture+challenge) → audit + alert, alur lanjut normal.
+  if (input.needsReview && input.status === "pending") {
+    const alert: PaymentAlert = {
+      kind: "needs_review",
+      paymentId: p.id,
+      transactionId: p.transaction_id,
+      expectedAmount: expected,
+      reportedAmount: input.amount,
+      reportedStatus: input.status,
+      source: input.source,
+    };
+    await writeAnomalyAudit(tx, "payment.needs_review", p.id, alert);
+    plog.warn("payment: pending needs_review (fraud challenge)", {});
+    result.alert = alert;
+  }
+
   // 2) Nominal wajib sama persis; `paid` tanpa nominal juga ditolak (tidak pernah paid).
   const mismatch =
     (input.amount !== null && input.amount !== expected) ||
@@ -172,7 +213,7 @@ export async function applyVerifiedStatus(
   if (!canTransition(p.status, input.status)) {
     // Uang masuk ke payment yang sudah expired/cancelled (BR-17) → perlu review manual.
     const paidAfterTerminal = input.status === "paid";
-    const alert: PaymentAlert | null = paidAfterTerminal
+    const transitionAlert: PaymentAlert | null = paidAfterTerminal
       ? {
           kind: "paid_after_terminal",
           paymentId: p.id,
@@ -188,13 +229,13 @@ export async function applyVerifiedStatus(
       tx,
       paidAfterTerminal ? "payment.needs_review" : "payment.ignored_transition",
       p.id,
-      alert ?? { from: p.status, to: input.status, source: input.source },
+      transitionAlert ?? { from: p.status, to: input.status, source: input.source },
     );
     (paidAfterTerminal ? plog.error : plog.warn)("payment: ignored_transition", {
       from: p.status,
       to: input.status,
     });
-    return { ...result, outcome: "ignored_transition", alert };
+    return { ...result, outcome: "ignored_transition", alert: transitionAlert ?? result.alert };
   }
 
   // 5) Update payment (guard status lama; baris sudah terkunci).
@@ -229,7 +270,9 @@ export async function applyVerifiedStatus(
     const row = updated.rows[0];
     // Total campaign harus memakai nominal yang terverifikasi; beda → rollback.
     if (row && BigInt(row.amount) !== expected) {
-      throw new Error("applyVerifiedStatus: transaction amount differs from verified payment amount");
+      throw new Error(
+        "applyVerifiedStatus: transaction amount differs from verified payment amount",
+      );
     }
     if (row) {
       await tx.execute(sql`
@@ -346,15 +389,13 @@ async function writeAnomalyAudit(
   const metadata = JSON.parse(
     JSON.stringify(detail, (_k, v: unknown) => (typeof v === "bigint" ? v.toString() : v)),
   ) as Record<string, unknown>;
-  await tx
-    .insert(auditLogs)
-    .values(
-      buildAuditRow({
-        actor: { type: "system" },
-        action,
-        entityType: "payment",
-        entityId: paymentId,
-        metadata,
-      }),
-    );
+  await tx.insert(auditLogs).values(
+    buildAuditRow({
+      actor: { type: "system" },
+      action,
+      entityType: "payment",
+      entityId: paymentId,
+      metadata,
+    }),
+  );
 }

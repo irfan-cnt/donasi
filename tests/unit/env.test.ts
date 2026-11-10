@@ -73,6 +73,7 @@ describe("env schema — auth Google (P04)", () => {
         AUTH_URL: "https://example.org",
         AUTH_GOOGLE_ID: "id",
         AUTH_GOOGLE_SECRET: "s",
+        MIDTRANS_IS_PRODUCTION: "true",
       }).APP_ENV,
     ).toBe("production");
   });

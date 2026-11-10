@@ -100,6 +100,7 @@ describe.skipIf(!ENABLED)("applyVerifiedStatus (integration)", () => {
   afterAll(async () => {
     if (paymentIds.length) {
       await sql`delete from payment_events where payment_id = any(${paymentIds}::uuid[])`;
+      await sql`delete from audit_logs where entity_type = 'payment' and entity_id = any(${paymentIds}::text[])`;
       await sql`delete from payments where id = any(${paymentIds}::uuid[])`;
     }
     if (txIds.length) await sql`delete from transactions where id = any(${txIds}::uuid[])`;
@@ -229,5 +230,60 @@ describe.skipIf(!ENABLED)("applyVerifiedStatus (integration)", () => {
       changed: false,
       alert: { kind: "unknown_payment" },
     });
+  });
+
+  it("refund dari webhook/reconcile tidak pernah diterapkan → alert refund_reported + audit", async () => {
+    const { paymentId } = await newPendingPayment();
+    for (const source of ["webhook", "reconcile", "expiry_job"] as const) {
+      const r = await apply({
+        paymentId,
+        status: "refunded",
+        amount: AMOUNT,
+        paidAt: null,
+        source,
+        eventId: null,
+        needsReview: true,
+      });
+      expect(r).toMatchObject({
+        outcome: "ignored_transition",
+        changed: false,
+        alert: { kind: "refund_reported", source },
+      });
+    }
+    const [p] = await sql`select status from payments where id = ${paymentId}`;
+    expect(p).toEqual({ status: "pending" });
+    const audits = await sql`select action from audit_logs where entity_id = ${paymentId}
+      and action = 'payment.needs_review'`;
+    expect(audits).toHaveLength(3);
+    // admin_check melewati guard refund (state machine tetap berlaku: pending ↛ refunded).
+    const r = await apply({
+      paymentId,
+      status: "refunded",
+      amount: AMOUNT,
+      paidAt: null,
+      source: "admin_check",
+      eventId: null,
+    });
+    expect(r).toMatchObject({ outcome: "ignored_transition", alert: null });
+  });
+
+  it("pending + needsReview (capture/challenge) → alert needs_review + audit, status tetap", async () => {
+    const { paymentId } = await newPendingPayment();
+    const r = await apply({
+      paymentId,
+      status: "pending",
+      amount: AMOUNT,
+      paidAt: null,
+      source: "webhook",
+      eventId: null,
+      needsReview: true,
+    });
+    expect(r).toMatchObject({
+      outcome: "duplicate",
+      changed: false,
+      alert: { kind: "needs_review", reportedStatus: "pending" },
+    });
+    const audits = await sql`select action from audit_logs where entity_id = ${paymentId}`;
+    expect(audits).toContainEqual({ action: "payment.needs_review" });
   });
 });

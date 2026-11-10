@@ -87,6 +87,36 @@ export const serverEnvSchema = z
           ctx.addIssue({ code: "custom", path: [key], message: "wajib di preview/production" });
       }
     }
+    // Midtrans (P10): selain production wajib sandbox; prefix kunci harus sesuai mode.
+    if (env.APP_ENV !== "production" && env.MIDTRANS_IS_PRODUCTION) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["MIDTRANS_IS_PRODUCTION"],
+        message: "harus false di development/preview",
+      });
+    }
+    // Production wajib Midtrans production (tanpa pengecualian staging).
+    if (env.APP_ENV === "production" && !env.MIDTRANS_IS_PRODUCTION) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["MIDTRANS_IS_PRODUCTION"],
+        message: "harus true di production",
+      });
+    }
+    const sandboxKeys = [
+      ["MIDTRANS_SERVER_KEY", "SB-Mid-server-"],
+      ["MIDTRANS_CLIENT_KEY", "SB-Mid-client-"],
+    ] as const;
+    for (const [key, prefix] of sandboxKeys) {
+      const value = env[key];
+      if (!value) continue;
+      if (!env.MIDTRANS_IS_PRODUCTION && !value.startsWith(prefix)) {
+        ctx.addIssue({ code: "custom", path: [key], message: `harus kunci sandbox (${prefix}…)` });
+      }
+      if (env.MIDTRANS_IS_PRODUCTION && value.startsWith("SB-")) {
+        ctx.addIssue({ code: "custom", path: [key], message: "kunci sandbox di mode production" });
+      }
+    }
     // Login donatur Google (P04): wajib di production. Di development/preview boleh kosong
     // (tombol Google gagal dengan pesan umum; e2e memakai sesi uji dari DB).
     if (env.APP_ENV !== "production") return;
