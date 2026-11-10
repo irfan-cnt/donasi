@@ -13,9 +13,18 @@ const ITEMS = [
     icon: LayoutGrid,
     match: (p: string) => p.startsWith("/campaign"),
   },
-  // Riwayat donasi (/akun/transaksi) dibuat di P18; sementara diarahkan ke /akun.
-  { href: "/akun", label: "Donasi Saya", icon: ReceiptText, match: () => false },
-  { href: "/akun", label: "Akun", icon: UserRound, match: (p: string) => p.startsWith("/akun") },
+  {
+    href: "/akun/donasi",
+    label: "Donasi Saya",
+    icon: ReceiptText,
+    match: (p: string) => p.startsWith("/akun/donasi"),
+  },
+  {
+    href: "/akun",
+    label: "Akun",
+    icon: UserRound,
+    match: (p: string) => p.startsWith("/akun") && !p.startsWith("/akun/donasi"),
+  },
 ] as const;
 
 // Detail campaign punya sticky CTA sendiri (AC-02.3) → bottom nav disembunyikan di sana.

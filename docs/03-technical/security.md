@@ -67,3 +67,14 @@ CSP ketat (nonce untuk script), `frame-ancestors 'none'`, HSTS (preload setelah 
 - Pratinjau draft: `/campaign/{slug}/pratinjau?token=…`, HMAC-SHA256 (kunci turunan `AUTH_SECRET` + label domain), berlaku 1 jam, dibandingkan `timingSafeEqual`, halaman `noindex` & tidak di-cache (`src/lib/security/preview-token*.ts`).
 - Daftar donatur publik hanya memilih nama tampil/"Hamba Allah", doa, nominal, waktu — kolom email/telepon tidak pernah di-select (uji e2e grep HTML).
 - `src/proxy.ts`: slug huruf besar → 301; draft/archived/slug salah → 404 sebelum streaming (memo in-process 60 s; fail-open ke soft 404 bila DB error).
+
+### Implementasi P18 (dashboard donatur & klaim)
+- **Klaim transaksi tamu** (event `signIn`, hanya email Google terverifikasi): satu DB transaction — donor tamu ber-email sama (`donors.email` UNIQUE citext) ditautkan ke user (bukan digabung); transaksi ber-`donor_email_snapshot` sama yang tercatat pada donor tamu lain (tanpa user, belum dianonimkan) dipindah. Saat ditautkan, field yang dideklarasikan tamu direset (nama = nama Google, WA NULL, opt-in WA & anonim default = false) karena siapa pun bisa checkout dengan email orang lain. Idempoten; audit `donor.guest_transactions_claimed` hanya bila ada perubahan.
+- **IDOR:** semua query dashboard memfilter `donor_id` dari sesi; `/akun/donasi/[code]` milik orang lain → 404 sungguhan (proxy `donorTransactionAccess` + halaman `notFound()`); action lanjut bayar juga 404.
+- **Lanjut bayar oleh pemilik:** access token hanya tersimpan hash-nya → server action (POST, requireDonor, status `created/pending`, `donor_id` sesi) menerbitkan token baru (TTL 7 hari, tautan lama di email tidak berlaku), audit `transaction.access_token_reissued`, lalu redirect ke halaman pembayaran/instruksi. Rate limit 10/jam per donor (fail-open, OD-15). Status pembayaran tidak disentuh (BR-18).
+- **Profil:** Zod + normalisasi WA `+62`; email read-only (tidak diterima dari form). Preferensi WA hanya default centang di checkout (OD-19). Audit `donor.profile_updated` tanpa nilai PII.
+- **Risiko diterima (belum diubah, menunggu PM):**
+  - L2: teks doa (`prayer`) tetap disimpan saat akun dihapus — keputusan retensi menunggu PM.
+  - L3: checkout tamu dengan email orang lain menambah transaksi (pending) ke dashboard pemilik email — gangguan saja; tidak ada akses ke data pemilik.
+  - L5: alamat email yang didaur ulang penyedia (pemilik baru Google) akan mengklaim transaksi tamu lama ber-email itu; klaim hanya mengandalkan email terverifikasi Google.
+

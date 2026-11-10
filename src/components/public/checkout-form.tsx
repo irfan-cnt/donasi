@@ -32,6 +32,9 @@ export interface CheckoutPrefill {
   name: string;
   email: string;
   phone: string;
+  /** Default checkbox dari profil (F-15). Persetujuan WA tetap per transaksi (P17). */
+  whatsappOptIn: boolean;
+  defaultAnonymous: boolean;
 }
 
 const rupiahFmt = new Intl.NumberFormat("id-ID", {
@@ -86,8 +89,8 @@ export function CheckoutForm({
   const [name, setName] = useState(prefill?.name ?? "");
   const [email, setEmail] = useState(prefill?.email ?? "");
   const [phone, setPhone] = useState(prefill?.phone ?? "");
-  const [anon, setAnon] = useState(false);
-  const [wa, setWa] = useState(true);
+  const [anon, setAnon] = useState(prefill?.defaultAnonymous ?? false);
+  const [wa, setWa] = useState(prefill ? prefill.whatsappOptIn : true);
   const [prayer, setPrayer] = useState("");
   const [touched, setTouched] = useState(false);
 

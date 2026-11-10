@@ -27,6 +27,8 @@ async function loadPrefill(): Promise<CheckoutPrefill | null> {
     name: donor.anonymizedAt ? "" : donor.name,
     email: donor.email,
     phone: donor.phoneE164 ? `0${donor.phoneE164.slice(3)}` : "",
+    whatsappOptIn: donor.whatsappOptIn,
+    defaultAnonymous: donor.defaultAnonymous,
   };
 }
 

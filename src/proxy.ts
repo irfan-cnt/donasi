@@ -5,6 +5,7 @@ import { readCampaignPreviewToken } from "@/lib/security/preview-token";
 import { normalizeSlug } from "@/lib/slug";
 import { isTransactionCode } from "@/lib/transaction-code";
 import {
+  donorTransactionAccess,
   previewCampaignExists,
   publicCampaignExists,
   publicNewsExists,
@@ -142,7 +143,26 @@ export async function proxy(request: NextRequest) {
     return hasAdmin ? NextResponse.next() : redirectTo(request, "/admin/masuk", false);
   }
   const hasDonor = DONOR_COOKIES.some((name) => request.cookies.has(name));
-  return hasDonor ? NextResponse.next() : redirectTo(request, "/masuk", true);
+  if (!hasDonor) return redirectTo(request, "/masuk", true);
+  return donorTransactionGate(request);
+}
+
+// Detail transaksi donor (P18): kode tidak ada / milik donor lain → 404 sungguhan (AC-13.1),
+// bukan soft 404 setelah streaming. Sesi tidak valid diteruskan ke halaman (requireDonor →
+// redirect /masuk).
+async function donorTransactionGate(request: NextRequest) {
+  const match = /^\/akun\/donasi\/([^/]+)\/?$/.exec(request.nextUrl.pathname);
+  if (!match) return NextResponse.next();
+  const code = match[1]!;
+  if (!isTransactionCode(code)) return notFoundResponse(request);
+  const token = DONOR_COOKIES.map((name) => request.cookies.get(name)?.value).find(Boolean) ?? "";
+  try {
+    const access = token ? await donorTransactionAccess(token, code) : "no_session";
+    return access === "not_found" ? notFoundResponse(request) : NextResponse.next();
+  } catch (error) {
+    logger.warn("cek transaksi donor gagal; fail-open", { error: String(error) });
+    return NextResponse.next();
+  }
 }
 
 export const config = { matcher: ["/campaign/:path+", "/donasi/:path+", "/transaksi/:path+", "/akun", "/akun/:path*", "/admin", "/admin/:path*"] };

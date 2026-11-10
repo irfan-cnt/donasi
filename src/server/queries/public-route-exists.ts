@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { campaignNews, campaigns, transactions } from "@/lib/db/schema";
+import { campaignNews, campaigns, donors, sessions, transactions } from "@/lib/db/schema";
 
 // Cek keberadaan untuk src/proxy.ts: dengan cacheComponents, notFound() di halaman terjadi setelah
 // shell mulai di-stream (status 200 + noindex). Agar draft/archived/slug salah benar-benar 404,
@@ -110,4 +110,23 @@ export async function transactionTokenValid(code: string, tokenHash: Buffer): Pr
     )
     .limit(1);
   return rows.length > 0;
+}
+
+/**
+ * /akun/donasi/[code]: transaksi milik donor dari sesi DB (cookie) ada. Tidak dimemo (data
+ * per-donor). Halaman tetap memeriksa ulang lewat requireDonor + filter donorId (AC-13.1).
+ */
+export async function donorTransactionAccess(
+  sessionToken: string,
+  code: string,
+): Promise<"owner" | "not_found" | "no_session"> {
+  const rows = await getDb()
+    .select({ owned: sql<boolean>`${transactions.id} is not null` })
+    .from(sessions)
+    .leftJoin(donors, eq(donors.userId, sessions.userId))
+    .leftJoin(transactions, and(eq(transactions.donorId, donors.id), eq(transactions.code, code)))
+    .where(and(eq(sessions.sessionToken, sessionToken), gt(sessions.expires, new Date())))
+    .limit(1);
+  if (!rows[0]) return "no_session";
+  return rows[0].owned ? "owner" : "not_found";
 }
