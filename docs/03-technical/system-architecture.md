@@ -105,7 +105,8 @@ src/app/
                                             Rute yang belum dibangun = halaman "Segera hadir" yang dijaga
                                             requireAdmin(permission menu yang sama) — tidak ada tautan 404.
   api/auth/[...nextauth]/  api/webhooks/*  api/jobs/*  api/donor/*  api/admin/*
-  api/admin/images/                         P21 upload gambar (POST, requireAdmin + campaigns.write|news.write)
+  api/admin/images/                         P21 upload gambar (POST, requireAdmin + campaigns.write|news.write|payment_methods.write)
+  api/admin/exports/                        P22 ekspor CSV (POST; stream ≤10k, >10k antre QStash) + download/ (GET, token HMAC 1 jam)
   api/dev-uploads/[file]/                   P21 HANYA APP_ENV=development: sajikan upload adapter lokal (404 di lingkungan lain)
 ```
 

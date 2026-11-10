@@ -74,7 +74,7 @@ test.describe("dashboard admin (P20)", () => {
     await expect(drawer.getByRole("link", { name: "Template" })).toHaveCount(0); // finance: tanpa notifications.write
     await drawer.getByRole("link", { name: "Donatur" }).click();
     await expect(page).toHaveURL(/\/admin\/donatur$/);
-    await expect(page.getByText("Segera hadir")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Donatur" }).filter({ visible: true })).toBeVisible(); // P22: halaman nyata
     await expect(drawer).toBeHidden();
     expect(await noOverflow(page)).toBe(true);
     expect(errors).toEqual([]);

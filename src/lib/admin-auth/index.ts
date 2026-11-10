@@ -144,3 +144,22 @@ export async function requireAdmin(
   if (permission && !hasPermission(ctx.permissions, permission)) forbidden();
   return ctx;
 }
+
+/**
+ * Bentuk requireAdmin untuk ROUTE HANDLER API admin (P22): validasi sesi & permission yang sama,
+ * tetapi menghasilkan respons HTTP nyata — 401 tanpa sesi / langkah login belum selesai,
+ * 403 tanpa permission — bukan redirect/forbidden() (yang di route stream 200/307).
+ */
+export async function requireAdminApi(
+  permission: Permission,
+): Promise<{ ok: true; ctx: AdminContext } | { ok: false; response: Response }> {
+  await connection();
+  const deny = (status: 401 | 403, error: string) => ({
+    ok: false as const,
+    response: Response.json({ error }, { status, headers: { "Cache-Control": "no-store" } }),
+  });
+  const ctx = await getAdminContext();
+  if (!ctx || ctx.pendingStep) return deny(401, "Sesi admin tidak valid. Silakan masuk kembali.");
+  if (!hasPermission(ctx.permissions, permission)) return deny(403, "Anda tidak punya izin untuk aksi ini.");
+  return { ok: true, ctx };
+}

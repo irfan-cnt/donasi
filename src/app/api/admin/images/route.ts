@@ -10,8 +10,8 @@ import { rateLimit } from "@/lib/redis";
 import { getImageStorage } from "@/lib/storage/image-storage";
 import { siteUrl } from "@/lib/site";
 
-// Upload gambar campaign/berita (OD-12): server-side, sesi admin + permission campaigns.write
-// atau news.write, cek Origin (cookie SameSite=Strict sebagai lapis pertama), magic bytes,
+// Upload gambar campaign/berita/logo metode (OD-12): server-side, sesi admin + permission
+// campaigns.write, news.write, atau payment_methods.write, cek Origin (cookie SameSite=Strict sebagai lapis pertama), magic bytes,
 // maks 2 MB, re-encode WebP. Token Blob tidak pernah ke browser.
 
 const json = (status: number, body: Record<string, unknown>) =>
@@ -34,7 +34,8 @@ function sameOrigin(req: Request): boolean {
 
 export async function POST(req: Request) {
   const ctx = await requireAdmin();
-  if (!hasPermission(ctx.permissions, "campaigns.write") && !hasPermission(ctx.permissions, "news.write")) {
+  // P22: logo metode pembayaran juga diunggah lewat route ini (payment_methods.write).
+  if (!(["campaigns.write", "news.write", "payment_methods.write"] as const).some((p) => hasPermission(ctx.permissions, p))) {
     return json(403, { error: "Anda tidak punya izin mengunggah gambar." });
   }
   if (!sameOrigin(req)) return json(403, { error: "Permintaan ditolak." });
