@@ -18,8 +18,12 @@ const ITEMS = [
   { href: "/akun", label: "Akun", icon: UserRound, match: (p: string) => p.startsWith("/akun") },
 ] as const;
 
+// Detail campaign punya sticky CTA sendiri (AC-02.3) → bottom nav disembunyikan di sana.
+const HIDE_ON = /^\/campaign\/[^/]+(\/pratinjau)?\/?$/;
+
 export function BottomNav() {
   const pathname = usePathname();
+  if (HIDE_ON.test(pathname)) return null;
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"

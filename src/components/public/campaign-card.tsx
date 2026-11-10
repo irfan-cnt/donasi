@@ -55,14 +55,10 @@ export function CampaignCard({
   priority?: boolean;
 }) {
   const href = `/campaign/${c.slug}`;
-  // Detail campaign (/campaign/[slug]) baru dibuat di P07; prefetch dimatikan sampai route
-  // itu ada agar daftar panjang tidak memicu prefetch 404. Aktifkan kembali di P07.
-  const prefetch = false;
   if (layout === "horizontal") {
     return (
       <Link
         href={href}
-        prefetch={prefetch}
         className="flex w-full gap-3 rounded-2xl border border-border bg-surface p-3 shadow-card transition hover:shadow-lift"
       >
         <CampaignImage
@@ -87,7 +83,6 @@ export function CampaignCard({
   return (
     <Link
       href={href}
-      prefetch={prefetch}
       className="group flex h-full w-full flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-card transition hover:-translate-y-0.5 hover:shadow-lift"
     >
       <div className="relative">

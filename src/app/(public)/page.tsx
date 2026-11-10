@@ -57,7 +57,6 @@ async function Hero() {
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               href={featured ? `/campaign/${featured.slug}` : "/campaign"}
-              prefetch={false}
               className={cn(
                 buttonVariants({ size: "lg" }),
                 "h-11 bg-gold px-5 text-white hover:bg-gold/90",
@@ -79,7 +78,6 @@ async function Hero() {
         {featured ? (
           <Link
             href={`/campaign/${featured.slug}`}
-            prefetch={false}
             className="overflow-hidden rounded-2xl bg-surface text-ink shadow-lift"
           >
             <div className="relative aspect-[16/8] w-full bg-primary-soft">

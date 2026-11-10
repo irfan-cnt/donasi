@@ -85,6 +85,7 @@ src/app/
   (public)/page.tsx                         Home
   (public)/campaign/[slug]/page.tsx         Campaign Detail
   (public)/campaign/[slug]/berita/[news]/   News Detail
+  (public)/campaign/[slug]/pratinjau/       Pratinjau admin draft (token HMAC 1 jam, noindex)
   (public)/donasi/[slug]/page.tsx           Checkout Form
   (public)/donasi/[slug]/pembayaran/        Select Payment
   (public)/transaksi/[code]/instruksi/      Payment Instruction

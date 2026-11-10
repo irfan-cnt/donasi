@@ -60,3 +60,10 @@ CSP ketat (nonce untuk script), `frame-ancestors 'none'`, HSTS (preload setelah 
 - [ ] Uji rate limit checkout & login admin
 - [ ] Dependabot/npm audit tanpa high/critical
 - [ ] Header keamanan terpasang
+
+### Implementasi P07 (detail campaign & berita)
+- Rich text campaign/news disanitasi server-side saat render (`src/lib/sanitize.ts`, `sanitize-html`, whitelist tanpa img/script/atribut event; link diberi `rel="nofollow noopener noreferrer"`). Editor P21 tetap wajib menyanitasi saat simpan.
+- JSON-LD diserialisasi via `serializeJsonLd` (escape `<`, `>`, `&`, U+2028/2029).
+- Pratinjau draft: `/campaign/{slug}/pratinjau?token=…`, HMAC-SHA256 (kunci turunan `AUTH_SECRET` + label domain), berlaku 1 jam, dibandingkan `timingSafeEqual`, halaman `noindex` & tidak di-cache (`src/lib/security/preview-token*.ts`).
+- Daftar donatur publik hanya memilih nama tampil/"Hamba Allah", doa, nominal, waktu — kolom email/telepon tidak pernah di-select (uji e2e grep HTML).
+- `src/proxy.ts`: slug huruf besar → 301; draft/archived/slug salah → 404 sebelum streaming (memo in-process 60 s; fail-open ke soft 404 bila DB error).
