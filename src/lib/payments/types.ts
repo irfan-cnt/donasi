@@ -81,6 +81,11 @@ export interface PaymentProvider {
   getPaymentStatus(ref: ProviderPaymentRef): Promise<StatusResult>;
   /** Melempar error bila tanda tangan/isi tidak valid. */
   verifyWebhook(req: { headers: Headers; rawBody: string }): Promise<VerifiedWebhook>;
+  /**
+   * Cek signature lokal saja (sinkron, timing-safe, tanpa I/O). Dipakai sebelum menyimpan apa pun;
+   * BUKAN pengganti verifyWebhook (yang juga cross-check status API).
+   */
+  checkWebhookSignature(req: { headers: Headers; rawBody: string }): boolean;
   getPaymentInstructions(payment: {
     providerRef: string;
     instruction: PaymentInstruction;

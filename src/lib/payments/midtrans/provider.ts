@@ -35,6 +35,8 @@ export interface MidtransDeps {
   now?: () => Date;
   timeoutMs?: number;
   logger?: Logger;
+  /** Non-production saja: header X-Override-Notification pada charge (URL https). */
+  notificationUrlOverride?: string;
 }
 
 type Json = Record<string, unknown>;
@@ -76,6 +78,11 @@ export function createMidtransProvider(deps: MidtransDeps): PaymentProvider {
   const base = baseUrl(deps.isProduction);
   const authorization = `Basic ${Buffer.from(`${deps.serverKey}:`).toString("base64")}`;
   const redact = (v: unknown) => redactPayload(v, deps.serverKey);
+  // Pertahanan berlapis selain env.ts: tidak pernah di mode production, hanya https.
+  const overrideNotification =
+    !deps.isProduction && deps.notificationUrlOverride?.startsWith("https://")
+      ? deps.notificationUrlOverride
+      : undefined;
 
   async function record(
     eventType: MidtransEventType,
@@ -110,6 +117,9 @@ export function createMidtransProvider(deps: MidtransDeps): PaymentProvider {
         Accept: "application/json",
         "Content-Type": "application/json",
         Authorization: authorization,
+        ...(overrideNotification && path === "/v2/charge"
+          ? { "X-Override-Notification": overrideNotification }
+          : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(timeoutMs),
@@ -297,6 +307,23 @@ export function createMidtransProvider(deps: MidtransDeps): PaymentProvider {
     }
   }
 
+  /** Zod ketat + signature SHA512 timing-safe (murni, sinkron). null = tidak valid. */
+  function parseSignedNotification(rawBody: string): z.infer<typeof notificationSchema> | null {
+    let body: z.infer<typeof notificationSchema>;
+    try {
+      body = notificationSchema.parse(JSON.parse(rawBody));
+    } catch {
+      return null;
+    }
+    const expected = computeSignature(
+      body.order_id,
+      body.status_code,
+      body.gross_amount,
+      deps.serverKey,
+    );
+    return signatureMatches(expected, body.signature_key) ? body : null;
+  }
+
   return {
     code: "midtrans",
 
@@ -323,21 +350,14 @@ export function createMidtransProvider(deps: MidtransDeps): PaymentProvider {
      * Verifikasi notifikasi: signature SHA512 timing-safe, LALU cross-check Get Status.
      * Status & nominal yang dikembalikan berasal dari API (kebenaran), bukan dari body webhook.
      */
+    checkWebhookSignature(req: { headers: Headers; rawBody: string }): boolean {
+      return parseSignedNotification(req.rawBody) !== null;
+    },
+
     async verifyWebhook(req: { headers: Headers; rawBody: string }): Promise<VerifiedWebhook> {
-      let body: z.infer<typeof notificationSchema>;
-      try {
-        body = notificationSchema.parse(JSON.parse(req.rawBody));
-      } catch {
-        throw new MidtransError("invalid_signature", "payload notifikasi tidak valid");
-      }
-      const expected = computeSignature(
-        body.order_id,
-        body.status_code,
-        body.gross_amount,
-        deps.serverKey,
-      );
-      if (!signatureMatches(expected, body.signature_key)) {
-        throw new MidtransError("invalid_signature", "signature_key tidak cocok");
+      const body = parseSignedNotification(req.rawBody);
+      if (!body) {
+        throw new MidtransError("invalid_signature", "payload/signature notifikasi tidak valid");
       }
       const status = await getStatus(body.order_id);
       if (status.providerRef && status.providerRef !== body.transaction_id) {

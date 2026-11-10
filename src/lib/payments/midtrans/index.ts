@@ -14,5 +14,7 @@ export function createMidtransFromEnv(env: ServerEnv): PaymentProvider {
     serverKey: env.MIDTRANS_SERVER_KEY,
     isProduction: env.MIDTRANS_IS_PRODUCTION,
     recordEvent: recordMidtransEvent,
+    notificationUrlOverride:
+      env.APP_ENV === "production" ? undefined : env.MIDTRANS_NOTIFICATION_URL_OVERRIDE,
   });
 }

@@ -213,7 +213,7 @@ CREATE TABLE payment_events (
   provider_id uuid NOT NULL REFERENCES payment_providers(id),
   provider_event_id text,                        -- id unik event / hash payload
   payment_id uuid REFERENCES payments(id),
-  event_type text NOT NULL,                      -- webhook, status_check, create_request, create_error, expire_request
+  event_type text NOT NULL,                      -- notification (webhook), status_check, create_request, create_error, expire_request
   verification event_verification NOT NULL DEFAULT 'pending',
   result event_result NOT NULL DEFAULT 'received',
   status_reported text, amount_reported bigint,

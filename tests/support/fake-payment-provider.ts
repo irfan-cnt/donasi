@@ -66,6 +66,10 @@ export class FakeProvider implements PaymentProvider {
     };
   }
 
+  checkWebhookSignature(req: { headers: Headers; rawBody: string }): boolean {
+    return req.headers.get("x-fake-signature") === "ok";
+  }
+
   async verifyWebhook(req: { headers: Headers; rawBody: string }): Promise<VerifiedWebhook> {
     if (req.headers.get("x-fake-signature") !== "ok") throw new Error("fake: invalid signature");
     const body = JSON.parse(req.rawBody) as {

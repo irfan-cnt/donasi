@@ -103,6 +103,22 @@ export const serverEnvSchema = z
         message: "harus true di production",
       });
     }
+    // P13: override URL notifikasi hanya untuk development/preview, wajib https.
+    if (env.MIDTRANS_NOTIFICATION_URL_OVERRIDE) {
+      if (env.APP_ENV === "production") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["MIDTRANS_NOTIFICATION_URL_OVERRIDE"],
+          message: "tidak boleh diisi di production",
+        });
+      } else if (!z.url({ protocol: /^https$/ }).safeParse(env.MIDTRANS_NOTIFICATION_URL_OVERRIDE).success) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["MIDTRANS_NOTIFICATION_URL_OVERRIDE"],
+          message: "harus URL https",
+        });
+      }
+    }
     const sandboxKeys = [
       ["MIDTRANS_SERVER_KEY", "SB-Mid-server-"],
       ["MIDTRANS_CLIENT_KEY", "SB-Mid-client-"],

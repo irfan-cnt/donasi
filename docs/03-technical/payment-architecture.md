@@ -181,6 +181,49 @@ Kunci idempotensi:
 - Hasil `{outcome, changed, becamePaid, newStatus, transactionStatus, campaignId, receiptNo, alert}`; notifikasi & `revalidateTag` hanya bila `becamePaid`, di luar transaksi DB.
 - Registry (`registry.ts`): `getProvider(code)` → `null` bila env (`MIDTRANS_SERVER_KEY` + `MIDTRANS_CLIENT_KEY`) tidak lengkap (slot Midtrans diisi `createMidtransFromEnv` di P10). Tidak ada provider palsu di `src/`; `FakeProvider` hanya di `tests/support/`.
 
+### 5b. Implementasi webhook (P13, T-24) — `POST /api/webhooks/midtrans`
+File: `src/app/api/webhooks/midtrans/route.ts` (runtime `nodejs`, tipis), `src/lib/payments/webhook/midtrans-webhook.ts` (alur), `src/lib/payments/webhook/side-effects.ts` (QStash + revalidate).
+
+Alur:
+1. `Content-Type` harus `application/json` (415); body dibaca dengan batas **16 KB** (stream, tidak hanya `Content-Length`; 413); JSON + Zod bentuk minimum (`order_id`, `transaction_id`, `transaction_status`, `status_code`, `gross_amount`, `signature_key`) → 400 tanpa disimpan (hanya path field yang salah yang dilog).
+1b. **Signature lokal dulu** (`provider.checkWebhookSignature`: Zod ketat + SHA512 timing-safe, sinkron, tanpa I/O). Salah → **401**, hanya log warn, **tanpa baris DB** dan tanpa panggilan Midtrans. Setiap penolakan menghitung rate limit per IP (`webhook-reject` 20/menit, Upstash; fallback in-memory hanya development; Redis error → fail-open) → lewat batas **429**.
+2. Insert `payment_events` (`event_type = notification`, `verification = pending`, `result = received`, payload ter-redaksi `redactPayload` — `signature_key` → `[REDACTED]`, PII disamarkan; header tidak disimpan; `payment_id` hanya bila baris payments ada).
+3. `provider.verifyWebhook` (SHA512 timing-safe → Get Status). Hasil:
+   - `invalid_signature` (cadangan; normalnya sudah tertolak di 1b) → `rejected`, **401**.
+   - Get Status `404` (order tak dikenal Midtrans, mis. tombol *Test notification* dashboard) → `verified` + `unknown_payment`, **200**.
+   - Gangguan sementara (`network`, `timeout`, `provider_unavailable`, `rate_limited`, `unauthorized`/kunci salah, error non-Midtrans) → `result = error`, verification tetap `pending`, **503**. Get Status 401/403 juga memancarkan log `payment.alert` kind `provider_auth` (server key salah/dicabut).
+   - Permanen lain (`unmapped_status` mis. `chargeback`/`authorize`, `transaction_id` ≠ API, respons tak valid) → `rejected` + audit `payment.webhook_unverifiable` (actor `provider`, entity `payment_event`) + log `payment.alert`, **200** (retry tidak membantu; rekonsiliasi P14 tetap memeriksa).
+4. **Satu transaksi DB**: `UPDATE payment_events SET provider_event_id = verified.eventId, verification = 'verified'` (klaim pada `UNIQUE(provider_id, provider_event_id)`) lalu `applyVerifiedStatus(tx, {source:'webhook', eventId: <id baris event>, needsReview, …})` — data hanya dari `VerifiedWebhook` (M2). Request paralel dengan eventId sama menunggu di indeks unik: bila pemenang commit → `23505` **pada constraint `payment_events_provider_event_key`** (dicek lewat nama constraint; unique violation lain → 503) → baris ini ditandai `duplicate`, **200**; bila pemenang rollback, klaim berikutnya berhasil (event tidak pernah "hilang" karena dedup). Error DB lain → rollback, `result = error`, **503**.
+5. Hasil di `payment_events.result`: `processed` / `duplicate` / `ignored_transition` / `amount_mismatch` / `unknown_payment` (ditulis `applyVerifiedStatus`). *needs_review* bukan nilai enum: dicatat sebagai audit `payment.needs_review` + `alert` (refund → `ignored_transition` + `refund_reported`; settlement setelah expired/cancelled → `ignored_transition` + `paid_after_terminal`; capture+challenge → `processed`/`duplicate` + `needs_review`).
+5b. **Outbox:** bila `becamePaid`, di transaksi yang sama ditulis `audit_logs` `notification.pending` (actor system, entity `transaction`, metadata `{event:'payment.paid', paymentId}`). Publish QStash setelah commit bisa gagal tanpa kehilangan notifikasi: **P16 (handler notify) dan/atau job P14 wajib menguras** penanda `notification.pending` yang belum punya `notification_logs` per kanal (dedup_key `payment.paid:{trx}:{channel}` mencegah kirim ganda). `notification_logs` tidak dipakai sebagai outbox karena butuh kanal & penerima (ditentukan P16).
+6. **Setelah commit** (tidak pernah mengubah kode respons; kegagalan hanya dilog): `alert` → log terstruktur `payment.alert` (audit sudah ditulis di dalam transaksi; email admin di P16). `becamePaid` → QStash `{event:'payment.paid', transactionId, paymentId}` ke `/api/jobs/notify` (dedup QStash `payment-paid-{transactionId}`; dedup per kanal `payment.paid:{trxId}:{channel}` ditegakkan P16 di `notification_logs.dedup_key`; tanpa `QSTASH_TOKEN` hanya development → log & lewati) dan `revalidateTag(campaign:{slug})` + `revalidateTag(campaigns)` dengan profil `max`, masing-masing maksimal 1×/10 s (`SET tk:throttle:revalidate:{tag} NX EX 10`; Redis error/dev tanpa Upstash → tetap revalidate). **Revalidate susulan (keputusan):** tidak ada job tertunda; revalidate yang ter-throttle mengandalkan `cacheLife` campaign (`revalidate: 60` s), jadi total paling lambat ±60 s basi. Dipilih karena paling sederhana dan benar (tanpa QStash tambahan); throttle hanya membatasi lonjakan.
+7. Balasan `{ok, result}` + `Cache-Control: no-store`. Tidak ada body/header yang dilog.
+
+**Kebijakan kode respons** (retry Midtrans §3a #10: 2xx tanpa retry; 500 → 1×; 503 → 4×; 400/404 → 2×; lainnya ≤5×):
+
+| Kondisi | Kode | Alasan |
+|---|---|---|
+| Diproses / duplikat / anomali tercatat / order tak dikenal / permanen tak terverifikasi | 200 | Sudah tercatat; retry tidak mengubah hasil |
+| Signature salah | 401 (tanpa baris DB) / 429 bila >20/menit per IP | Bukan dari Midtrans; retry tidak berbahaya |
+| Body bukan JSON / bentuk salah | 400 | Permanen |
+| Content-Type salah / body > 16 KB | 415 / 413 | Permanen |
+| DB/Midtrans/QStash-tidak-relevan gangguan sementara, provider belum dikonfigurasi | 503 | Dapat 4× retry; idempoten berkat klaim eventId di dalam transaksi |
+
+**Idempotensi:** (a) `UNIQUE(provider_id, provider_event_id)` diklaim di transaksi yang sama dengan apply; (b) `SELECT … FOR UPDATE` payment + `status = input` → `duplicate`; (c) guard `transactions.status NOT IN ('paid','refunded')` (BR-19) — total campaign hanya bertambah sekali walau eventId berbeda (mis. notifikasi `pending` lalu `settlement`, atau retry dengan `status_code` berbeda); (d) dedup QStash + `notification_logs`. Notifikasi terlambat (mis. `pending` setelah `settlement`) memakai status **dari Get Status** sehingga menjadi `duplicate`, bukan regresi.
+
+**X-Override-Notification (opsional):** `MIDTRANS_NOTIFICATION_URL_OVERRIDE` (env.ts: hanya URL `https`, ditolak bila `APP_ENV=production`; adapter juga mengabaikannya bila `isProduction` atau bukan https) dikirim sebagai header `X-Override-Notification` pada `POST /v2/charge` saja — notifikasi transaksi itu dikirim ke URL tersebut alih-alih URL dashboard. Berguna untuk preview Vercel per-branch tanpa mengubah dashboard.
+
+#### Uji manual dengan Midtrans Simulator (dilakukan PM; agent tidak membuka tunnel)
+1. Dapatkan URL publik https: deployment **preview Vercel** (disarankan) atau tunnel yang dijalankan PM sendiri (`cloudflared tunnel --url http://localhost:3000` / `ngrok http 3000`) — matikan setelah selesai.
+2. Atur URL notifikasi, pilih salah satu:
+   - Dashboard **Sandbox** Midtrans → *Settings* → *Payment* → *Notification URL* → isi **Payment Notification URL** = `https://<url>/api/webhooks/midtrans` → *Save*. Tombol *Test notification* mengirim `order_id` contoh → harus dibalas 200 (`unknown_payment`) dan tercatat di `payment_events`.
+   - atau set `MIDTRANS_NOTIFICATION_URL_OVERRIDE=https://<url>/api/webhooks/midtrans` di env preview (tidak mengubah dashboard).
+3. Buat donasi di URL itu, pilih mis. BCA VA → catat nomor VA di halaman instruksi.
+4. Buka **simulator.sandbox.midtrans.com** → pilih kanal (Virtual Account BCA / QRIS / GoPay / Mandiri Bill) → tempel nomor VA/kode bayar/QR → *Inquire* → *Pay*.
+5. Verifikasi: halaman instruksi berpindah ke `berhasil` (polling 5 s); `payments`/`transactions` = `paid`, nomor kuitansi terbit, `campaigns.collected_amount` naik sekali; `payment_events` berisi baris `notification` `processed` (+ `status_check`). Kirim ulang notifikasi dari Dashboard (*Transactions* → detail → *Resend notification*) → baris baru `duplicate`, total tidak berubah.
+6. Skenario lain: biarkan VA kedaluwarsa lalu bayar → `ignored_transition` + audit `payment.needs_review`; ubah Notification URL ke path salah → Midtrans mencoba ulang sesuai kebijakan retry.
+7. Setelah selesai kosongkan override/kembalikan Notification URL dan matikan tunnel.
+
 ## 6. Rekonsiliasi
 - **Expiry job** (5 menit) dan **rekonsiliasi harian** memanggil `getPaymentStatus` lalu menggunakan fungsi yang sama `applyVerifiedStatus()` dengan webhook.
 - Selisih (provider paid, DB tidak; nominal beda; payment tak dikenal) → `audit_logs` aksi `reconciliation.issue` + email admin.
