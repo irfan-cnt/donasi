@@ -304,13 +304,14 @@ async function createLocked(
   }
 
   const paymentId = newId();
-  await insertCreatedPayment({
+  const inserted = await insertCreatedPayment({
     id: paymentId,
     transactionId: trx.id,
     paymentMethodId: method.id,
     providerId: method.providerId,
     amount: trx.amount,
   });
+  if (!inserted) return fail("not_payable", MSG.notPayable, false);
   const plog = log.child({ paymentId });
 
   // BR-17: expire payment lama ke provider dulu. Gagal → payment lama tetap pending (masih sah).

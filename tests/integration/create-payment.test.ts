@@ -209,6 +209,27 @@ describe.skipIf(!ENABLED)("createPayment (integration)", () => {
     expect(await txStatus(t.id)).toBe("pending");
   });
 
+  it("P14 race: transaksi ditutup job di antara insert & aktivasi → tidak dibuka kembali, charge di-expire", async () => {
+    const t = await newTransaction();
+    const racing: PaymentProvider = Object.create(provider) as PaymentProvider;
+    racing.createPayment = async (i) => {
+      const res = await provider.createPayment(i);
+      // Simulasi cancel-stale/heal yang commit setelah charge dibuat, sebelum activatePayment.
+      await sql`update transactions set status = 'cancelled' where id = ${t.id}`;
+      return res;
+    };
+    const expireBefore = provider.calls.expire.length;
+    const r = await createPaymentForTransaction(input(t), log, deps({ getProvider: () => racing }));
+    expect(r).toMatchObject({ ok: false, reason: "not_payable" });
+    expect(await txStatus(t.id)).toBe("cancelled");
+    expect((await paymentsOf(t.id)).map((p) => p.status)).toEqual(["failed"]);
+    expect(provider.calls.expire.length).toBe(expireBefore + 1);
+    // Transaksi tertutup → insert payment baru ditolak (FOR UPDATE + cek ulang status).
+    const again = await createPaymentForTransaction(input(t), log, deps());
+    expect(again).toMatchObject({ ok: false, reason: "not_payable" });
+    expect((await paymentsOf(t.id)).map((p) => p.status)).toEqual(["failed"]);
+  });
+
   it("error provider saat ganti metode → lama cancelled, transaksi tidak pernah cancelled, retry OK", async () => {
     const t = await newTransaction();
     await createPaymentForTransaction(input(t, methodA), log, deps());

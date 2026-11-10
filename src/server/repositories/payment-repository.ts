@@ -138,10 +138,18 @@ export async function insertCreatedPayment(values: {
   paymentMethodId: string;
   providerId: string;
   amount: bigint;
-}): Promise<void> {
-  await getDb()
-    .insert(payments)
-    .values({ ...values, status: "created" });
+}): Promise<boolean> {
+  // Kunci transaksi agar berurutan dengan job cancel-stale/heal (P14): payment `created` hanya
+  // dibuat bila transaksi masih `created`/`pending`. false = transaksi sudah ditutup.
+  return getTxDb().transaction(async (tx) => {
+    const locked = await tx.execute<{ status: string }>(
+      sql`SELECT status FROM transactions WHERE id = ${values.transactionId} FOR UPDATE`,
+    );
+    const status = locked.rows[0]?.status;
+    if (status !== "created" && status !== "pending") return false;
+    await tx.insert(payments).values({ ...values, status: "created" });
+    return true;
+  });
 }
 
 /** created → failed (createPayment provider gagal / dibatalkan sebelum aktif). */
@@ -178,7 +186,9 @@ export async function activatePayment(args: {
       sql`SELECT status FROM transactions WHERE id = ${args.transactionId} FOR UPDATE`,
     );
     const status = locked.rows[0]?.status;
-    if (!status || status === "paid" || status === "refunded") {
+    // Hanya transaksi hidup (created/pending) yang boleh diaktifkan; cancelled/expired/failed
+    // (mis. ditutup job P14 di antara insert dan aktivasi) tidak pernah dibuka kembali.
+    if (status !== "created" && status !== "pending") {
       await tx
         .update(payments)
         .set({ status: "failed", failureReason: "transaksi sudah ditutup", updatedAt: sql`now()` })

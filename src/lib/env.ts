@@ -18,6 +18,8 @@ const DEPLOYED_REQUIRED = [
   "QSTASH_CURRENT_SIGNING_KEY",
   "QSTASH_NEXT_SIGNING_KEY",
   "APP_ENCRYPTION_KEY",
+  // P14: URL kanonik untuk verifikasi signature QStash & tujuan publish job.
+  "APP_URL",
 ] as const;
 
 /** Ambil env opsional yang dibutuhkan fitur tertentu; error berisi NAMA variabel saja. */

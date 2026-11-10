@@ -11,6 +11,7 @@ const valid = {
   QSTASH_NEXT_SIGNING_KEY: "k2",
   AUTH_SECRET: "x".repeat(32),
   APP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
+  APP_URL: "https://example.org",
 };
 
 describe("env schema", () => {
@@ -76,6 +77,15 @@ describe("env schema — auth Google (P04)", () => {
         MIDTRANS_IS_PRODUCTION: "true",
       }).APP_ENV,
     ).toBe("production");
+  });
+});
+
+describe("env schema — APP_URL (P14)", () => {
+  it("boleh kosong di development, wajib di preview/production", () => {
+    expect(
+      parseServerEnv({ ...valid, APP_URL: "", APP_ENV: "development" }).APP_URL,
+    ).toBeUndefined();
+    expect(() => parseServerEnv({ ...valid, APP_URL: "", APP_ENV: "preview" })).toThrow(/APP_URL/);
   });
 });
 

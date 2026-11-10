@@ -17,12 +17,19 @@
 - Midtrans Payment Notification URL: `https://{domain}/api/webhooks/midtrans`
 - Preview deployment tidak menerima webhook produksi; gunakan URL dev/ngrok untuk sandbox.
 
+## Kontrak job QStash (P14)
+- Endpoint: `POST https://{APP_URL}/api/jobs/{expire-payments|cancel-stale|reconcile|campaign-scheduler}` — wajib header `Upstash-Signature` yang valid untuk URL kanonik `APP_URL + path` (semua environment; tanpa bypass). `APP_URL` deployment harus sama dengan tujuan schedule.
+- Schedule dibuat/diperbarui dengan `pnpm qstash:schedules` (`--dry-run` untuk melihat rencana; `--force` untuk memindah host; `--yes` wajib di production). `APP_URL` wajib di preview/production. Cron QStash dalam UTC: expire `*/5`, cancel-stale `7 * * * *`, reconcile `0 18 * * *` (01:00 WIB), campaign-scheduler `*/15`.
+- `/api/jobs/notify` (P16) menerima `payment.paid`, `payment.pending`, dan `admin.alert` (rekonsiliasi → email `EMAIL_ADMIN_ALERT`).
+- Development tanpa QStash: endpoint tetap menolak request tanpa signature; publish (notifikasi/lanjutan/alert) di-log & dilewati. Uji lokal end-to-end memakai QStash CLI dev server (`npx @upstash/qstash-cli dev`) dengan signing key-nya di `.env.local`.
+
 ## Failure mode
 
 | Integrasi down | Dampak | Penanganan |
 |---|---|---|
 | Midtrans | Pembayaran baru tidak bisa dibuat | Banner "Pembayaran sedang gangguan" di Select Payment, alert admin, transaksi tetap `created` dan bisa dilanjutkan nanti |
 | Webhook terlambat | Status tertunda | Polling halaman + expiry/reconcile job |
+| QStash | Job/notifikasi tertunda | Job idempoten, jadwal berikutnya mengejar; outbox `notification.pending` dikuras rekonsiliasi |
 | Gmail | Email tertunda | Retry QStash, log failed |
 | Fonnte | WA tertunda | Retry, tidak blokir |
 | Redis | Cache/rate limit tidak tersedia | Fail-open untuk cache, **fail-closed** untuk rate limit checkout? → default fail-open dengan log (open decision) |
