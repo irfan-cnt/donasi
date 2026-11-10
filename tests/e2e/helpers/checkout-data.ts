@@ -31,6 +31,28 @@ export async function getTransactionAmount(code: string): Promise<bigint | null>
 export async function cleanupCheckout(emails: string[]): Promise<void> {
   if (!emails.length) return;
   const db = sql();
+  // Charge sandbox yang dibuat e2e di-expire dulu (Midtrans sandbox saja), lalu baris dihapus.
+  const pending = await db`select p.id from payments p join transactions t on t.id = p.transaction_id
+    where t.donor_email_snapshot = any(${emails}::citext[]) and p.status = 'pending'`;
+  for (const row of pending) await expireSandboxCharge(row.id as string);
+  await db`delete from payment_events where payment_id in (select p.id from payments p
+    join transactions t on t.id = p.transaction_id where t.donor_email_snapshot = any(${emails}::citext[]))`;
+  await db`delete from payments where transaction_id in (select id from transactions
+    where donor_email_snapshot = any(${emails}::citext[]))`;
   await db`delete from transactions where donor_email_snapshot = any(${emails}::citext[])`;
   await db`delete from donors where email = any(${emails}::citext[]) and user_id is null`;
+}
+
+/** Expire charge di Midtrans SANDBOX (hanya kunci SB-; tidak pernah ke production). */
+export async function expireSandboxCharge(orderId: string): Promise<void> {
+  const key = process.env.MIDTRANS_SERVER_KEY ?? "";
+  if (!key.startsWith("SB-Mid-server-") || process.env.MIDTRANS_IS_PRODUCTION === "true") return;
+  await fetch(`https://api.sandbox.midtrans.com/v2/${encodeURIComponent(orderId)}/expire`, {
+    method: "POST",
+    headers: { Accept: "application/json", Authorization: `Basic ${Buffer.from(`${key}:`).toString("base64")}` },
+  }).catch(() => undefined);
+}
+
+export function sandboxConfigured(): boolean {
+  return (process.env.MIDTRANS_SERVER_KEY ?? "").startsWith("SB-Mid-server-") && process.env.MIDTRANS_IS_PRODUCTION !== "true";
 }

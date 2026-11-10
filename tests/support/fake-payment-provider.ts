@@ -17,7 +17,20 @@ export class FakeProvider implements PaymentProvider {
     { status: PaymentStatus; amount: bigint; paidAt?: Date }
   >();
 
+  /** Error yang dilempar createPayment berikutnya (sekali pakai). */
+  failNextCreate: Error | null = null;
+  /** providerRef paksaan untuk createPayment berikutnya (mis. memicu bentrok constraint). */
+  nextProviderRef: string | null = null;
+
+  readonly calls = { create: [] as string[], expire: [] as string[] };
+
   async createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult> {
+    this.calls.create.push(input.paymentId);
+    if (this.failNextCreate) {
+      const e = this.failNextCreate;
+      this.failNextCreate = null;
+      throw e;
+    }
     this.state.set(input.paymentId, { status: "pending", amount: input.amount });
     const instruction: PaymentInstruction = {
       kind: "virtual_account",
@@ -25,7 +38,9 @@ export class FakeProvider implements PaymentProvider {
       vaNumber: "0000000000",
       expiresAt: new Date(Date.now() + input.expiresInMinutes * 60_000),
     };
-    return { providerRef: `fake-${input.paymentId}`, status: "pending", instruction };
+    const providerRef = this.nextProviderRef ?? `fake-${input.paymentId}`;
+    this.nextProviderRef = null;
+    return { providerRef, status: "pending", instruction };
   }
 
   /** Simulasi provider: ubah status/nominal yang akan dilaporkan. */
@@ -70,6 +85,7 @@ export class FakeProvider implements PaymentProvider {
   }
 
   async expirePayment(ref: ProviderPaymentRef): Promise<void> {
+    this.calls.expire.push(ref.orderId);
     this.set(ref.orderId, "expired");
   }
 }

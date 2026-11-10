@@ -74,3 +74,36 @@ export async function rateLimit(
   const { success, remaining, reset } = await getRateLimiter(name, limit, window).limit(identifier);
   return { success, remaining, reset };
 }
+
+// Lock singkat (SET NX PX) untuk mencegah klik ganda; pemilik dicek saat melepas.
+// Fallback in-memory KHUSUS APP_ENV=development tanpa Upstash (per proses).
+const memoryLocks = new Map<string, { owner: string; exp: number }>();
+
+/** Ambil lock `tk:lock:{name}` selama `ttlMs`; kembalikan token pemilik atau null bila terkunci. */
+export async function acquireLock(name: string, ttlMs: number): Promise<string | null> {
+  const owner = crypto.randomUUID();
+  const key = `tk:lock:${name}`;
+  if (shouldUseMemoryFallback()) {
+    const now = Date.now();
+    const cur = memoryLocks.get(key);
+    if (cur && cur.exp > now) return null;
+    memoryLocks.set(key, { owner, exp: now + ttlMs });
+    return owner;
+  }
+  const ok = await getRedis().set(key, owner, { nx: true, px: ttlMs });
+  return ok === "OK" ? owner : null;
+}
+
+/** Lepas lock hanya bila masih dimiliki `owner` (tidak melepas lock milik request lain). */
+export async function releaseLock(name: string, owner: string): Promise<void> {
+  const key = `tk:lock:${name}`;
+  if (shouldUseMemoryFallback()) {
+    if (memoryLocks.get(key)?.owner === owner) memoryLocks.delete(key);
+    return;
+  }
+  await getRedis().eval(
+    `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`,
+    [key],
+    [owner],
+  );
+}

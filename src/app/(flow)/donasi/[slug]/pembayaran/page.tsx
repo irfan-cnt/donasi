@@ -1,4 +1,7 @@
 import { Clock } from "lucide-react";
+import { EmptyState } from "@/components/public/empty-state";
+import { SelectPaymentForm } from "@/components/public/select-payment-form";
+import { expiryLabel } from "@/lib/payments/method-groups";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { z } from "zod";
@@ -7,10 +10,10 @@ import { formatRupiah } from "@/lib/money";
 import { SITE_NAME } from "@/lib/site";
 import { normalizeSlug } from "@/lib/slug";
 import { TRANSACTION_CODE_PATTERN } from "@/lib/transaction-code";
-import { getTransactionByAccess } from "@/server/services/donation-service";
+import { getSelectPaymentView } from "@/server/services/payment-service";
 
-// Select Payment — PLACEHOLDER P08 (P11 membangun pemilihan metode). Hanya menampilkan ringkasan
-// bila kode transaksi + access token sah (hash cocok, belum kedaluwarsa); selain itu 404.
+// Select Payment (T-20, F-05). Hanya dengan kode transaksi + access token sah (hash cocok, belum
+// kedaluwarsa, slug cocok); selain itu 404 (juga dicek lebih dulu di src/proxy.ts).
 // Token ada di URL → no-referrer & tidak diindeks (security.md §2).
 export const instant = false;
 
@@ -33,11 +36,14 @@ export default async function SelectPaymentPage({
   const slug = normalizeSlug(raw);
   const parsed = querySchema.safeParse(query);
   if (!slug || !parsed.success) notFound();
-  const trx = await getTransactionByAccess(slug, parsed.data.trx, parsed.data.t);
-  if (!trx) notFound();
+  const view = await getSelectPaymentView(slug, parsed.data.trx, parsed.data.t);
+  if (!view) notFound();
+  const { transaction: trx, groups } = view;
+  const payable = trx.status === "created" || trx.status === "pending";
+  const amountLabel = formatRupiah(trx.amount);
 
   return (
-    <FlowLayout title="Pilih Pembayaran" step={2}>
+    <FlowLayout title="Pilih Pembayaran" backHref={`/campaign/${slug}`} step={2} withFooter={payable && groups.length > 0}>
       <section className="rounded-xl border border-border bg-surface p-4" aria-label="Ringkasan donasi">
         <p className="text-xs text-ink-faint">Kode transaksi</p>
         <p className="font-mono text-sm font-semibold" data-testid="trx-code">
@@ -55,15 +61,39 @@ export default async function SelectPaymentPage({
           <div className="flex justify-between gap-4 border-t border-border pt-2">
             <dt className="font-semibold">Total donasi</dt>
             <dd className="font-bold text-primary-ink tabular-nums" data-testid="trx-amount">
-              {formatRupiah(trx.amount)}
+              {amountLabel}
             </dd>
           </div>
         </dl>
       </section>
-      <p className="mt-4 flex items-start gap-2 rounded-xl bg-primary-soft p-4 text-sm text-primary-ink">
-        <Clock className="mt-0.5 size-4 shrink-0" aria-hidden />
-        Pilihan metode pembayaran sedang disiapkan. Simpan tautan halaman ini untuk melanjutkan pembayaran.
-      </p>
+      <p className="mt-1 text-right text-xs text-ink-faint">Tanpa biaya tambahan</p>
+      {!payable ? (
+        <EmptyState
+          icon={Clock}
+          title="Transaksi tidak dapat dibayar"
+          description="Transaksi ini sudah selesai atau tidak lagi menunggu pembayaran."
+        />
+      ) : groups.length === 0 ? (
+        <EmptyState
+          icon={Clock}
+          title="Metode pembayaran belum tersedia"
+          description="Kami sedang melakukan pemeliharaan sistem pembayaran. Coba lagi beberapa saat lagi."
+        />
+      ) : (
+        <SelectPaymentForm
+          slug={slug}
+          trx={trx.code}
+          token={parsed.data.t}
+          initialMethod={view.currentMethod}
+          amountLabel={amountLabel}
+          groups={groups.map((g) => ({
+            key: g.key,
+            title: g.title,
+            hint: g.hint,
+            methods: g.methods.map((m) => ({ code: m.code, name: m.displayName, expiry: expiryLabel(m.expiryMinutes) })),
+          }))}
+        />
+      )}
     </FlowLayout>
   );
 }

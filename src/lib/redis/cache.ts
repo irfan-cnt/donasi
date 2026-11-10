@@ -36,3 +36,14 @@ export async function cachedJson<T>(
   }
   return value;
 }
+
+/** Hapus entri cache (mis. setelah admin mengubah data). No-op di development tanpa Upstash. */
+export async function invalidateCache(key: string): Promise<void> {
+  const env = getEnv();
+  if (env.APP_ENV === "development" && !env.UPSTASH_REDIS_REST_URL) return;
+  try {
+    await getRedis().del(`tk:cache:${key}`);
+  } catch (error) {
+    logger.warn("redis cache del gagal", { key, error: String(error) });
+  }
+}

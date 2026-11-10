@@ -9,6 +9,7 @@ import {
   publicCampaignExists,
   publicNewsExists,
   transactionAccessExists,
+  transactionTokenValid,
 } from "@/server/queries/public-route-exists";
 
 // Lapisan pertama saja (optimistic): cek keberadaan cookie sesi. Validasi sesi sebenarnya
@@ -103,9 +104,29 @@ async function donationGate(request: NextRequest) {
   }
 }
 
+// Halaman transaksi /transaksi/[code]/* (instruksi P11, status P12): hanya dengan kode + access
+// token sah (?t=), selain itu 404.
+async function transactionGate(request: NextRequest) {
+  const match = /^\/transaksi\/([^/]+)(?:\/.*)?$/.exec(request.nextUrl.pathname);
+  if (!match) return notFoundResponse(request);
+  const code = match[1]!;
+  const token = request.nextUrl.searchParams.get("t") ?? "";
+  try {
+    const ok =
+      isTransactionCode(code) &&
+      /^[A-Za-z0-9_-]{43}$/.test(token) &&
+      (await transactionTokenValid(code, sha256(token)));
+    return ok ? NextResponse.next() : notFoundResponse(request);
+  } catch (error) {
+    logger.warn("cek rute transaksi gagal; fail-open", { error: String(error) });
+    return NextResponse.next();
+  }
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (pathname.startsWith("/donasi/")) return donationGate(request);
+  if (pathname.startsWith("/transaksi/")) return transactionGate(request);
   if (pathname.startsWith("/campaign/")) {
     return canonicalCampaignRedirect(request) ?? campaignExistenceGate(request);
   }
@@ -118,4 +139,4 @@ export async function proxy(request: NextRequest) {
   return hasDonor ? NextResponse.next() : redirectTo(request, "/masuk", true);
 }
 
-export const config = { matcher: ["/campaign/:path+", "/donasi/:path+", "/akun", "/akun/:path*", "/admin", "/admin/:path*"] };
+export const config = { matcher: ["/campaign/:path+", "/donasi/:path+", "/transaksi/:path+", "/akun", "/akun/:path*", "/admin", "/admin/:path*"] };

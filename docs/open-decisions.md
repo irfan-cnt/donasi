@@ -19,3 +19,4 @@
 | OD-15 | Rate limit saat Redis down | Fail-open / fail-closed | Fail-open + alert (donasi tidak terblokir) | Ketahanan checkout |
 | OD-16 | Mode warna gelap | Tidak / nanti | Light saja di MVP (sesuai prompt) | — |
 | OD-17 | Admin di path `/admin` vs subdomain `admin.` | path / subdomain | Path `/admin` + cookie `__Host-` terpisah; subdomain bila tim bertambah | Konfigurasi cookie & CSP |
+| OD-18 | ✅ **Diputuskan 10 Nov 2026:** transaksi yang sudah dibuat **tetap boleh dibayar** walau campaign kemudian di-pause/selesai (BR-03 hanya berlaku saat membuat transaksi) | — | `createPayment` tidak memeriksa ulang status campaign; pembayaran masuk tetap dihitung | Select Payment (P11), webhook (P13) |

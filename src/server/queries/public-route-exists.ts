@@ -95,3 +95,19 @@ export async function transactionAccessExists(
     .limit(1);
   return rows.length > 0;
 }
+
+/** Halaman /transaksi/[code]/*: kode + hash access token cocok dan belum kedaluwarsa. */
+export async function transactionTokenValid(code: string, tokenHash: Buffer): Promise<boolean> {
+  const rows = await getDb()
+    .select({ one: sql<number>`1` })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.code, code),
+        eq(transactions.accessTokenHash, tokenHash),
+        gt(transactions.accessTokenExpiresAt, new Date()),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
