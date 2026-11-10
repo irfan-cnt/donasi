@@ -81,6 +81,7 @@ describe.skipIf(!ENABLED)("notify WhatsApp P17 (integration, Fonnte dimock)", ()
       whatsappSetting: async () => setting,
       lock,
       verify: async (sig) => sig === VALID_SIG,
+      publishReceipt: async () => {}, // P19: jangan publish ke QStash sungguhan
     });
   const post = async (job: unknown, h = handler()) => {
     const r = await h(

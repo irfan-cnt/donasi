@@ -33,6 +33,7 @@ export default async function DonorTransactionDetailPage({ params, searchParams 
   if (!detail) notFound();
   const { trx, timeline, news, methodName } = detail;
   const payable = trx.status === "created" || trx.status === "pending";
+  const receiptReady = trx.status === "paid" && !!trx.receiptNo;
 
   const rows: [string, string][] = [
     ["Metode", methodName ?? "—"],
@@ -113,18 +114,37 @@ export default async function DonorTransactionDetailPage({ params, searchParams 
         <div className="space-y-3">
           <section className="rounded-2xl border border-border bg-surface p-4">
             <p className="font-semibold text-ink">Dokumen</p>
-            {/* PDF transaksi & kuitansi menyusul di P19 (F-14). */}
-            <Button variant="outline" className="mt-3 w-full justify-start" disabled>
+            {/* PDF transaksi & kuitansi (P19, F-14): <a download> biasa, tanpa prefetch. */}
+            <a
+              href={`/api/donor/transactions/${trx.code}/pdf?type=summary`}
+              download
+              data-testid="pdf-summary"
+              className={buttonVariants({ variant: "outline", className: "mt-3 w-full justify-start" })}
+            >
               <FileText aria-hidden />
               Bukti Transaksi (PDF)
-            </Button>
-            <Button className="mt-2 w-full justify-start" disabled>
-              <Download aria-hidden />
-              Kuitansi Donasi (PDF)
-            </Button>
-            <p className="mt-3 flex gap-1.5 text-xs text-ink-faint">
+            </a>
+            {receiptReady ? (
+              <a
+                href={`/api/donor/transactions/${trx.code}/pdf?type=receipt`}
+                download
+                data-testid="pdf-receipt"
+                className={buttonVariants({ className: "mt-2 w-full justify-start" })}
+              >
+                <Download aria-hidden />
+                Kuitansi Donasi (PDF)
+              </a>
+            ) : (
+              <Button className="mt-2 w-full justify-start" disabled aria-describedby="receipt-note">
+                <Download aria-hidden />
+                Kuitansi Donasi (PDF)
+              </Button>
+            )}
+            <p id="receipt-note" className="mt-3 flex gap-1.5 text-xs text-ink-faint">
               <ShieldCheck className="size-3.5 shrink-0" aria-hidden />
-              Unduhan PDF segera tersedia. Dokumen hanya bisa diunduh oleh pemilik akun.
+              {receiptReady
+                ? "Dokumen hanya bisa diunduh oleh pemilik akun."
+                : "Kuitansi tersedia setelah pembayaran berhasil. Dokumen hanya bisa diunduh oleh pemilik akun."}
             </p>
           </section>
           {news && (

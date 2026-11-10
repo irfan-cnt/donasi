@@ -74,7 +74,6 @@ test("detail milik sendiri tampil; kode milik donor lain → 404 (AC-13.1)", asy
   await page.goto(`/akun/donasi/${data.paid.code}`);
   await expect(page.getByTestId("trx-code")).toHaveText(data.paid.code);
   await expect(page.getByTestId("timeline")).toContainText("Donasi dibuat");
-  await expect(page.getByRole("button", { name: /Kuitansi Donasi/ })).toBeDisabled();
   expect(errors).toEqual([]);
 
   const other = await page.goto(`/akun/donasi/${data.other.code}`);
@@ -163,4 +162,25 @@ test("donor tamu yang ditanam dengan email korban → prefill checkout bersih se
   await expect
     .poll(() => getDonorProfile(donorIds[0]!))
     .toMatchObject({ phone_e164: null, whatsapp_opt_in: false, default_anonymous: false });
+});
+
+test("PDF: unduh kuitansi & bukti transaksi (P19); expired → kuitansi nonaktif; donor lain → 404", async ({ page, baseURL }) => {
+  const data = await login(page, baseURL!);
+  await page.goto(`/akun/donasi/${data.paid.code}`);
+  const [receipt] = await Promise.all([page.waitForEvent("download"), page.getByTestId("pdf-receipt").click()]);
+  expect(receipt.suggestedFilename()).toMatch(/^kuitansi-KW-\d{4}-\d{6}\.pdf$/);
+  const [summary] = await Promise.all([page.waitForEvent("download"), page.getByTestId("pdf-summary").click()]);
+  expect(summary.suggestedFilename()).toBe(`transaksi-${data.paid.code}.pdf`);
+
+  const res = await page.request.get(`/api/donor/transactions/${data.paid.code}/pdf?type=receipt`);
+  expect(res.status()).toBe(200);
+  expect(res.headers()["cache-control"]).toBe("private, no-store, max-age=0");
+  expect(res.headers()["content-disposition"]).toMatch(/^attachment; filename="kuitansi-/);
+  expect((await res.body()).subarray(0, 5).toString()).toBe("%PDF-");
+
+  await page.goto(`/akun/donasi/${data.expired.code}`);
+  await expect(page.getByRole("button", { name: /Kuitansi Donasi/ })).toBeDisabled();
+  expect((await page.request.get(`/api/donor/transactions/${data.expired.code}/pdf?type=receipt`)).status()).toBe(404);
+  expect((await page.request.get(`/api/donor/transactions/${data.other.code}/pdf?type=receipt`)).status()).toBe(404);
+  expect((await page.request.get(`/api/donor/transactions/${data.other.code}/pdf?type=summary`)).status()).toBe(404);
 });

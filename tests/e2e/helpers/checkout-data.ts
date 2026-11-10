@@ -1,4 +1,5 @@
 // Helper KHUSUS TEST: data paket & pembersihan transaksi checkout e2e (hanya Neon branch `dev`).
+import { randomInt } from "node:crypto";
 import { neon } from "@neondatabase/serverless";
 import { config } from "dotenv";
 
@@ -115,5 +116,8 @@ export async function seedTransaction(opts: {
 export async function markSeededPaid(transactionId: string, paymentId: string): Promise<void> {
   const db = sql();
   await db`update payments set status = 'paid', paid_at = now() where id = ${paymentId}`;
-  await db`update transactions set status = 'paid', paid_at = now() where id = ${transactionId}`;
+  // P19: nomor kuitansi uji (tahun 1998, tidak bentrok dengan receipt_counters sungguhan).
+  const receiptNo = `KW/1998/${String(randomInt(1_000_000)).padStart(6, "0")}`;
+  await db`update transactions set status = 'paid', paid_at = now(), receipt_no = ${receiptNo}, receipt_issued_at = now()
+    where id = ${transactionId}`;
 }

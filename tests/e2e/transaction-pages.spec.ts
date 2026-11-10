@@ -136,7 +136,13 @@ test("polling berhenti → tombol 'Cek status'; paid → berhasil (hook interval
   await cek.click();
   await page.waitForURL(new RegExp(`/transaksi/${t.code}/berhasil\\?t=`));
   await expect(page.getByTestId("payment-success")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Unduh Kuitansi/ })).toBeDisabled();
+  // P19: kuitansi tamu dengan access token transaksi.
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("receipt-download").click()]);
+  expect(download.suggestedFilename()).toMatch(/^kuitansi-KW-\d{4}-\d{6}\.pdf$/);
+  const ok = await page.request.get(`/api/transactions/${t.code}/receipt?t=${t.token}`);
+  expect(ok.status()).toBe(200);
+  expect(ok.headers()["cache-control"]).toBe("private, no-store, max-age=0");
+  expect((await page.request.get(`/api/transactions/${t.code}/receipt?t=${"A".repeat(43)}`)).status()).toBe(404);
   await expect(page.getByText("Simpan riwayat donasimu")).toBeVisible();
   await noOverflow(page, "berhasil", info.project.name === "desktop");
   expect(errors).toEqual([]);

@@ -69,6 +69,7 @@ export const notifyJobSchema = z.discriminatedUnion("event", [
 ]);
 
 export type DonorJob = z.infer<typeof donorJobSchema>;
+export type ReceiptJob = z.infer<typeof receiptJobSchema>;
 export type WhatsappJob = z.infer<typeof whatsappJobSchema>;
 export type AdminAlertJob = z.infer<typeof adminAlertJobSchema>;
 export type NotifyJob = z.infer<typeof notifyJobSchema>;

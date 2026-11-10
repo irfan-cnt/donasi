@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { FlowLayout } from "@/components/public/flow-layout";
 import { TransactionSummary } from "@/components/public/transaction/transaction-summary";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
 import { SITE_NAME } from "@/lib/site";
 import { tokenQuery, transactionPageInput } from "@/lib/validation/transaction-page";
@@ -45,11 +45,18 @@ export default async function SuccessPage({ params, searchParams }: PageProps<"/
         </p>
         <TransactionSummary view={view} />
         <div className="mt-5 grid gap-2 sm:grid-cols-2">
-          {/* Kuitansi PDF diaktifkan di P19 (T-34). */}
-          <Button variant="outline" size="lg" disabled aria-describedby="receipt-note">
+          {/* Kuitansi PDF (P19, T-34): token akses transaksi; halaman ini no-referrer. */}
+          <a
+            href={`/api/transactions/${view.transaction.code}/receipt?${tokenQuery(parsed.data.t)}`}
+            download
+            rel="noreferrer"
+            data-testid="receipt-download"
+            aria-describedby="receipt-note"
+            className={buttonVariants({ variant: "outline", size: "lg" })}
+          >
             <Download aria-hidden />
             Unduh Kuitansi (PDF)
-          </Button>
+          </a>
           <Link
             href={`/campaign/${view.transaction.campaignSlug}`}
             className={buttonVariants({ variant: "secondary", size: "lg" })}
@@ -58,7 +65,7 @@ export default async function SuccessPage({ params, searchParams }: PageProps<"/
           </Link>
         </div>
         <p id="receipt-note" className="mt-2 text-xs text-ink-faint">
-          Kuitansi akan segera tersedia untuk diunduh.
+          Tautan unduh kuitansi berlaku selama tautan transaksi ini aktif (7 hari). Setelahnya, masuk untuk mengunduh kapan saja.
         </p>
         {guest && (
           <section className="mt-6 rounded-xl border border-primary/20 bg-primary-soft/50 p-4 text-left" aria-label="Ajakan masuk">

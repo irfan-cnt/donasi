@@ -1,5 +1,5 @@
 // Helper KHUSUS TEST (P18): donor + transaksi langsung di DB untuk e2e dashboard (Neon `dev`).
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import { neon } from "@neondatabase/serverless";
 import { config } from "dotenv";
 import type { SeededDonorSession } from "./donor-session";
@@ -41,9 +41,10 @@ export async function seedDashboard(seed: SeededDonorSession, opts: { phone?: st
     const k = code();
     const hash = createHash("sha256").update(randomBytes(32).toString("base64url")).digest();
     await db`insert into transactions (id, code, access_token_hash, access_token_expires_at, campaign_id, donor_id, amount, status,
-      campaign_title_snapshot, donor_name_snapshot, donor_email_snapshot, prayer, paid_at, created_at)
+      campaign_title_snapshot, donor_name_snapshot, donor_email_snapshot, prayer, paid_at, created_at, receipt_no, receipt_issued_at)
       values (${randomUUID()}, ${k}, ${hash}, now() + interval '7 days', ${c.id}, ${donor}, ${amount}, ${status},
-      'Beasiswa Santri Penghafal Quran', 'Donatur E2E', ${seed.email}, 'Semoga berkah', ${status === "paid" ? createdAt : null}, ${createdAt})`;
+      'Beasiswa Santri Penghafal Quran', 'Donatur E2E', ${seed.email}, 'Semoga berkah', ${status === "paid" ? createdAt : null}, ${createdAt},
+      ${status === "paid" ? `KW/1998/${String(randomInt(1_000_000)).padStart(6, "0")}` : null}, ${status === "paid" ? createdAt : null})`;
     return { code: k, status };
   };
   const paid = await insert(donorId, "paid", 150_000, "2026-03-05T02:00:00Z");

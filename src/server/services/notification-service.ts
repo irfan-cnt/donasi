@@ -1,5 +1,5 @@
 import "server-only";
-import type { EmailQuotaCounter, EmailSender } from "@/lib/email/gmail";
+import type { EmailAttachment, EmailQuotaCounter, EmailSender } from "@/lib/email/gmail";
 import type { Logger } from "@/lib/logger";
 import { formatRupiah } from "@/lib/money";
 import { renderEmailLayout, type EmailOrganization } from "@/lib/notifications/email-layout";
@@ -9,6 +9,7 @@ import {
   type AdminAlertJob,
   type DonorJob,
   type NotifyJob,
+  type ReceiptJob,
   type WhatsappJob,
   WHATSAPP_EVENTS,
   whatsappSource,
@@ -61,6 +62,10 @@ export interface NotifyDeps {
   publishWhatsapp: (job: WhatsappJob, log: Logger) => Promise<void>;
   /** platform_settings notifications.whatsapp_enabled (default: baca DB). */
   whatsappSetting?: () => Promise<boolean>;
+  /** P19: publish job `receipt.issued` setelah payment.paid (notify-handler: publishNotification; tanpa ini → tidak dipublish). */
+  publishReceipt?: (job: ReceiptJob, log: Logger) => Promise<void>;
+  /** P19: muat kuitansi PDF transaksi (default: receipt-service; di-inject di test). */
+  loadReceipt?: (transactionId: string) => Promise<{ filename: string; body: Buffer } | null>;
   now?: () => Date;
 }
 
@@ -194,7 +199,7 @@ interface EmailPlan {
   template: { id: string; version: number } | null;
   payload: Record<string, unknown> | null;
   /** null = lewati dengan alasan `skipReason`. */
-  build: (() => Promise<{ subject: string; html: string; text: string }>) | null;
+  build: (() => Promise<{ subject: string; html: string; text: string; attachments?: EmailAttachment[] }>) | null;
   skipReason?: string;
 }
 
@@ -451,6 +456,52 @@ async function handleDonorJob(job: DonorJob, deps: NotifyDeps, now: Date): Promi
   return { event: job.event, email, whatsapp };
 }
 
+/**
+ * receipt.issued (P19): email kuitansi dengan lampiran PDF. Transaksi belum/bukan paid → diabaikan.
+ * Render PDF gagal → error → QStash retry; tidak pernah menyentuh status pembayaran (BR-31).
+ */
+async function handleReceiptJob(job: ReceiptJob, deps: NotifyDeps, now: Date): Promise<NotifySummary> {
+  const ctx = await findNotificationContext(job.transactionId, null);
+  if (!ctx || ctx.transactionStatus !== "paid") {
+    deps.log.warn("notify: receipt.issued untuk transaksi non-paid/tidak ada; diabaikan");
+    return { event: job.event, ignored: "not_paid" };
+  }
+  const loadReceipt = deps.loadReceipt ?? defaultLoadReceipt;
+  const vars = { ...buildVars(ctx, deps.config.siteUrl), payment_url: `${deps.config.siteUrl}/akun/donasi/${ctx.code}` };
+  const template = await findActiveTemplate(job.event, "email");
+  const email = await deliverEmail(
+    {
+      event: job.event,
+      dedupKey: dedupKey(job, "email"),
+      transactionId: job.transactionId,
+      recipient: ctx.donorEmail,
+      template: template ? { id: template.id, version: template.version } : null,
+      payload: redactPayload(vars),
+      build: template
+        ? async () => {
+            const pdf = await loadReceipt(job.transactionId);
+            if (!pdf) throw new Error("kuitansi belum tersedia");
+            const subject = renderSubject(template.subject ?? "", vars);
+            const body = renderTemplate(template.body, vars);
+            return {
+              subject,
+              ...renderEmailLayout({ subject, body, org: await organization(deps.config.siteUrl) }),
+              attachments: [{ filename: pdf.filename, content: pdf.body, contentType: "application/pdf" }],
+            };
+          }
+        : null,
+    },
+    deps,
+    now,
+  );
+  return { event: job.event, email };
+}
+
+async function defaultLoadReceipt(transactionId: string) {
+  const { receiptForTransaction } = await import("@/server/services/receipt-service");
+  return (await receiptForTransaction(transactionId))?.pdf ?? null;
+}
+
 const ALERT_LABEL: Record<string, string> = {
   amount_mismatch: "Nominal pembayaran tidak sesuai",
   paid_after_terminal: "Pembayaran masuk setelah transaksi selesai/kedaluwarsa",
@@ -530,10 +581,13 @@ export async function processNotifyJob(body: unknown, deps: NotifyDeps): Promise
   }
   const job: NotifyJob = parsed.data;
   const now = (deps.now ?? (() => new Date()))();
-  if (job.event === "receipt.issued") {
-    // Hook P19 (kuitansi PDF): template sudah di-seed; pengiriman disambungkan saat PDF tersedia.
-    deps.log.info("notify: receipt.issued belum diaktifkan (P19)");
-    return { event: job.event, ignored: "not_implemented" };
+  if (job.event === "receipt.issued") return handleReceiptJob(job, deps, now);
+  if (job.event === "payment.paid" && deps.publishReceipt) {
+    // P19: kuitansi dikirim lewat job terpisah (dedup QStash receipt-issued-{trx} + dedup_key
+    // receipt.issued:{trx}:email). Gagal publish tidak menggagalkan email paid / status bayar.
+    await deps.publishReceipt({ event: "receipt.issued", transactionId: job.transactionId }, deps.log).catch((e: unknown) =>
+      deps.log.error("publish receipt.issued gagal", { error: safeErrorCode(e) }),
+    );
   }
   if (job.event === "admin.alert") return handleAdminAlert(job, deps, now);
   if (job.event === "whatsapp.send") return handleWhatsappJob(job, deps, now);

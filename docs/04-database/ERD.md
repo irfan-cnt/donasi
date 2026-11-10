@@ -75,6 +75,8 @@ erDiagram
     bigint amount
     enum status
     text receipt_no UK
+    jsonb receipt_snapshot
+    bytea receipt_hash
   }
   payments {
     uuid id PK

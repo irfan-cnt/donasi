@@ -72,7 +72,8 @@ Lapisan: **UI (RSC/Client) → Server Actions / Route Handlers → Services (log
 | `/api/webhooks/midtrans` | POST | Signature Midtrans |
 | `/api/transactions/[code]/status` | GET | access token transaksi / sesi pemilik |
 | `/api/jobs/*` (expire, reconcile, notify, campaign-scheduler) | POST | Signature QStash |
-| `/api/donor/transactions/[id]/pdf?type=summary|receipt` | GET | Sesi donor + ownership |
+| `/api/donor/transactions/[code]/pdf?type=summary|receipt` | GET | Sesi donor + ownership (P19) |
+| `/api/transactions/[code]/receipt?t=` | GET | Access token transaksi (tamu, P19) |
 | `/api/admin/export/{transactions|donors}` | GET | Sesi admin + permission |
 | `/api/auth/[...nextauth]` | GET/POST | Auth.js |
 

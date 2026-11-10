@@ -185,6 +185,7 @@ CREATE TABLE transactions (
   is_anonymous boolean NOT NULL DEFAULT false, prayer text CHECK (char_length(prayer) <= 280),
   whatsapp_opt_in boolean NOT NULL DEFAULT false,
   paid_at timestamptz, receipt_no text UNIQUE, receipt_issued_at timestamptz,
+  receipt_snapshot jsonb, receipt_hash bytea,    -- P19: isi kuitansi beku (tanpa nama donatur) + SHA-256 data kanonis (BR-28)
   source jsonb,                                  -- utm, referrer (tanpa PII)
   ip_hash bytea, user_agent text,
   created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),

@@ -84,6 +84,7 @@ describe.skipIf(!ENABLED)("notify P16 (integration)", () => {
       publishAdminAlert,
       lock,
       verify: async (sig) => sig === VALID_SIG,
+      publishReceipt: async () => {}, // P19: jangan publish ke QStash sungguhan
     });
   const post = (job: unknown, sig = VALID_SIG, h = handler()) =>
     h(

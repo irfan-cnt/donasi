@@ -134,6 +134,10 @@ export const transactions = pgTable(
     paidAt: tstz("paid_at"),
     receiptNo: text("receipt_no").unique(),
     receiptIssuedAt: tstz("receipt_issued_at"),
+    /** P19: isi kuitansi beku (identitas lembaga, metode, dst.; TANPA nama donatur) — BR-28. */
+    receiptSnapshot: jsonb("receipt_snapshot"),
+    /** P19: SHA-256 data kanonis kuitansi saat terbit (termasuk nama tampilan donatur). */
+    receiptHash: bytea("receipt_hash"),
     source: jsonb("source"),
     ipHash: bytea("ip_hash"),
     userAgent: text("user_agent"),

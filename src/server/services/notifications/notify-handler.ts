@@ -48,6 +48,8 @@ export function createNotifyHandler(
         whatsapp: deps.whatsapp ?? createEnvFonnteSender(),
         publishWhatsapp: deps.publishWhatsapp ?? publishWhatsappJob,
         whatsappSetting: deps.whatsappSetting,
+        publishReceipt: deps.publishReceipt ?? publishNotification,
+        loadReceipt: deps.loadReceipt,
         now: deps.now ? () => new Date(deps.now!()) : undefined,
       });
       return { ...summary };

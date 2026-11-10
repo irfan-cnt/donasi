@@ -12,6 +12,14 @@ export interface EmailMessage {
   subject: string;
   html: string;
   text: string;
+  /** P19: lampiran (mis. kuitansi PDF). */
+  attachments?: EmailAttachment[];
+}
+
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
 }
 
 /** Ringkasan respons SMTP yang aman disimpan (tanpa kredensial). */
@@ -53,6 +61,11 @@ export function createGmailSender(): EmailSender {
         subject: message.subject,
         html: message.html,
         text: message.text,
+        attachments: message.attachments?.map((a) => ({
+          filename: a.filename,
+          content: a.content,
+          contentType: a.contentType,
+        })),
       });
       return {
         messageId: typeof info.messageId === "string" ? info.messageId : null,
