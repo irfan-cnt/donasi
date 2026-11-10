@@ -21,3 +21,6 @@ next-env.d.ts
 /blob-report/
 /playwright/.cache/
 .neon
+
+# P21: upload gambar adapter lokal (development tanpa BLOB_READ_WRITE_TOKEN)
+/public/uploads/dev/

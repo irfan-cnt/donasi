@@ -2,6 +2,7 @@
 
 ## Campaign
 - **BR-01** Status campaign: `draft → published ⇄ paused → completed → archived`. `draft` hanya bisa ke `published` atau dihapus. `archived` final (tidak tampil publik).
+  - > **Catatan P21 (deviasi):** arsip dari `draft`/`published`/`paused` diizinkan (P21 #3: campaign yang tidak bisa dihapus permanen diarsipkan) — menunggu konfirmasi PM.
 - **BR-02** Campaign `published` wajib punya: judul, slug unik, ringkasan, deskripsi, gambar utama (dengan alt), kategori, tipe nominal valid.
 - **BR-03** Campaign menerima donasi bila: `status = published` AND (`start_at` NULL atau ≤ now) AND (`end_at` NULL atau > now).
 - **BR-04** Target penggalangan (`target_amount`) opsional dan **independen** dari tipe nominal. Tanpa target → UI menampilkan "Terkumpul Rp X" tanpa progress bar persentase.
@@ -66,3 +67,4 @@
 - **BR-41** Admin tidak dapat menandai transaksi `paid` secara manual.
 - **BR-42** Minimal satu `owner` aktif harus selalu ada.
 - **BR-43** Rincian penyaluran dana (OD-06): nominal `bigint` rupiah > 0; total penyaluran per campaign tidak boleh melebihi `collected_amount`; setiap perubahan masuk audit log; entri dihapus secara soft delete (tidak hard delete).
+  - > **Catatan P21:** penyaluran hanya untuk campaign non-draft; berita bukti wajib terbit & milik campaign yang sama. Celah diketahui: refund belum menurunkan `collected_amount` (alur refund belum dirancang), sehingga batas ini bisa longgar setelah refund.

@@ -130,3 +130,13 @@ export async function donorTransactionAccess(
   if (!rows[0]) return "no_session";
   return rows[0].owned ? "owner" : "not_found";
 }
+
+/**
+ * P21: lupakan memo keberadaan campaign/berita setelah publish/unpublish/ubah slug. Best effort:
+ * memo hidup per instance proxy; instance lain kedaluwarsa sendiri dalam ≤ 60 detik.
+ */
+export function forgetCampaignExistence(slug: string): void {
+  for (const key of memo.keys()) {
+    if (key === `c:${slug}` || key.startsWith(`n:${slug}/`)) memo.delete(key);
+  }
+}

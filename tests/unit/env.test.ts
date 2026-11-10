@@ -16,6 +16,7 @@ const valid = {
   GMAIL_APP_PASSWORD: "abcdabcdabcdabcd",
   EMAIL_FROM: "Tebar Kebaikan <notif@example.org>",
   EMAIL_ADMIN_ALERT: "admin@example.org",
+  BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_test",
 };
 
 describe("env schema", () => {
@@ -151,5 +152,13 @@ describe("env schema — email Gmail (P16)", () => {
     expect(parseServerEnv({ ...valid, EMAIL_DAILY_LIMIT: "" }).EMAIL_DAILY_LIMIT).toBe(500);
     expect(parseServerEnv({ ...valid, EMAIL_DAILY_LIMIT: "2000" }).EMAIL_DAILY_LIMIT).toBe(2000);
     expect(() => parseServerEnv({ ...valid, EMAIL_DAILY_LIMIT: "0" })).toThrow(/EMAIL_DAILY_LIMIT/);
+  });
+});
+
+describe("BLOB_READ_WRITE_TOKEN (P21, OD-12)", () => {
+  it("boleh kosong di development, wajib di preview/production", () => {
+    expect(() => parseServerEnv({ ...valid, BLOB_READ_WRITE_TOKEN: "" })).not.toThrow();
+    expect(() => parseServerEnv({ ...valid, APP_ENV: "preview", BLOB_READ_WRITE_TOKEN: "" })).toThrow(/BLOB_READ_WRITE_TOKEN/);
+    expect(() => parseServerEnv({ ...valid, APP_ENV: "production", BLOB_READ_WRITE_TOKEN: "" })).toThrow(/BLOB_READ_WRITE_TOKEN/);
   });
 });

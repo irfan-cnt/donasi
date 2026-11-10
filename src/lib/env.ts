@@ -25,6 +25,8 @@ const DEPLOYED_REQUIRED = [
   "GMAIL_APP_PASSWORD",
   "EMAIL_FROM",
   "EMAIL_ADMIN_ALERT",
+  // P21 (OD-12): upload gambar ke Vercel Blob. Development tanpa token memakai disk lokal.
+  "BLOB_READ_WRITE_TOKEN",
 ] as const;
 
 /** Ambil env opsional yang dibutuhkan fitur tertentu; error berisi NAMA variabel saja. */
@@ -101,6 +103,8 @@ export const serverEnvSchema = z
       z.coerce.number().int().min(1000).max(600_000).default(3000),
     ),
     BLOB_READ_WRITE_TOKEN: optionalString,
+    // M1 P21: id store Blob proyek ("store_…") untuk mengunci host gambar yang diizinkan.
+    BLOB_STORE_ID: optionalString,
     SENTRY_DSN: optionalString,
   })
   .superRefine((env, ctx) => {

@@ -95,13 +95,18 @@ src/app/
   (donor)/akun/...                          Dashboard, transaksi, profil
   admin/masuk/                              Admin login
   admin/(panel)/                            Dashboard (P20): KPI, grafik harian, performa campaign, transaksi terbaru
-  admin/(panel)/{campaign,berita}/          P21 (campaigns.read / news.write)
+  admin/(panel)/campaign/                   P21 daftar (campaigns.read): filter status/kategori/tipe, cari judul (trigram), paginasi
+  admin/(panel)/campaign/baru/              P21 editor baru (campaigns.write)
+  admin/(panel)/campaign/[id]/              P21 editor + status + penyaluran dana (campaigns.read; aksi per permission)
+  admin/(panel)/berita/                     P21 daftar + editor panel (?tulis / ?edit=) (news.write)
   admin/(panel)/{transaksi,donatur,metode-pembayaran,log-pembayaran,audit}/   P22
   admin/(panel)/{template-notifikasi,log-notifikasi}/                       P23
                                             Menu admin (src/lib/admin-auth/admin-nav.ts) difilter permission BR-40.
                                             Rute yang belum dibangun = halaman "Segera hadir" yang dijaga
                                             requireAdmin(permission menu yang sama) — tidak ada tautan 404.
   api/auth/[...nextauth]/  api/webhooks/*  api/jobs/*  api/donor/*  api/admin/*
+  api/admin/images/                         P21 upload gambar (POST, requireAdmin + campaigns.write|news.write)
+  api/dev-uploads/[file]/                   P21 HANYA APP_ENV=development: sajikan upload adapter lokal (404 di lingkungan lain)
 ```
 
 ## 5. Strategi rendering
@@ -111,6 +116,8 @@ src/app/
 | Home, Campaign Detail, News | RSC + ISR (`revalidate` 60 s) + `revalidateTag` saat admin publish / pembayaran paid (total). Implementasi Next 16 `cacheComponents`: query di `src/server/queries/*` memakai `"use cache"` + `cacheLife({ revalidate: 60 })` + `cacheTag('campaigns', 'campaign:{slug}')`; bagian yang membaca `searchParams` (`?kategori=`) di dalam `<Suspense>` (PPR). Statistik (5 menit) & kategori (1 jam) juga di-cache Redis via `cachedJson`; tanpa Upstash di `APP_ENV=development` Redis dilewati, di preview/production env Upstash wajib; error Redis runtime → fail-open + log. |
 | Checkout, Select Payment, Instruction, Pending, Success | Dinamis (`no-store`) |
 | Donor & Admin | Dinamis, server-only auth |
+
+- Invalidasi admin (P21, `src/server/services/campaign-cache.ts`): setiap mutasi campaign/berita/penyaluran memanggil `revalidateTag('campaigns', {expire: 0})` + `revalidateTag('campaign:{slug}', {expire: 0})` (slug lama & baru) dan mengosongkan memo keberadaan 404 di `src/proxy.ts` untuk slug itu (best effort per instance; instance lain kedaluwarsa ≤ 60 s). Sitemap ikut tag `campaigns`.
 
 ## 6. Keputusan arsitektur (ADR ringkas)
 
