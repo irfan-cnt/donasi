@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ================================================================
+   Tebar Kebaikan — Design tokens (light theme utama)
+   Hijau zamrud = amanah & ketenangan; emas lembut = kehangatan.
+   ================================================================ */
+:root {
+  --bg: 250 249 245;          /* #FAF9F5 krem hangat */
+  --surface: 255 255 255;
+  --muted: 243 241 235;       /* #F3F1EB */
+  --border: 229 226 217;      /* #E5E2D9 */
+  --ink: 23 32 28;            /* #17201C */
+  --ink-soft: 74 85 80;       /* #4A5550 */
+  --ink-faint: 120 130 125;   /* #78827D */
+
+  --primary: 13 110 86;       /* #0D6E56 emerald */
+  --primary-hover: 10 90 70;
+  --primary-soft: 228 242 236;
+  --primary-ink: 6 60 47;
+
+  --gold: 183 135 46;         /* #B7872E */
+  --gold-soft: 250 243 226;
+
+  --success: 22 128 72;   --success-soft: 226 245 234;
+  --warning: 180 110 10;  --warning-soft: 254 243 222;
+  --danger: 190 40 50;    --danger-soft: 253 232 233;
+  --info: 30 100 180;     --info-soft: 230 240 252;
+}
+
+html { -webkit-tap-highlight-color: transparent; }
+body {
+  @apply bg-bg text-ink font-sans antialiased;
+  font-feature-settings: 'tnum' 0;
+}
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* Motif geometri halus (bintang 8 sudut) — dipakai sangat tipis */
+.pattern-islamic {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.10' stroke-width='1'%3E%3Cpath d='M24 4l5.9 14.1L44 24l-14.1 5.9L24 44l-5.9-14.1L4 24l14.1-5.9z'/%3E%3Crect x='14' y='14' width='20' height='20' transform='rotate(45 24 24)'/%3E%3C/g%3E%3C/svg%3E");
+}
+.pattern-islamic-dark {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Cg fill='none' stroke='%230D6E56' stroke-opacity='0.08' stroke-width='1'%3E%3Cpath d='M24 4l5.9 14.1L44 24l-14.1 5.9L24 44l-5.9-14.1L4 24l14.1-5.9z'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+.prose-tk p { @apply mb-3 leading-relaxed text-ink-soft; }
+.prose-tk h3 { @apply mt-5 mb-2 font-semibold text-ink; }
+.prose-tk ul { @apply mb-3 list-disc pl-5 text-ink-soft space-y-1; }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+:focus-visible { outline: 2px solid rgb(var(--primary)); outline-offset: 2px; }

@@ -1,0 +1,148 @@
+# Payment Architecture
+
+> **Keputusan 10 Nov 2026 (OD-03):** MVP hanya memakai **Midtrans Core API**. Interface `PaymentProvider` tetap dibangun agar provider lain bisa ditambahkan tanpa mengubah alur checkout; bagian Xendit di bawah menjadi referensi untuk fase berikutnya dan **tidak diimplementasikan** di MVP. Fallback antar-provider (BR-16) nonaktif.
+
+## 1. Prinsip
+1. Status bayar hanya dari **webhook terverifikasi** atau **query status ke API provider**.
+2. Semua pemrosesan **idempoten**; total campaign bertambah sekali per transaksi.
+3. Setiap interaksi provider dicatat di `payment_events`.
+4. Secret hanya di server (`MIDTRANS_SERVER_KEY`).
+5. Hanya metode yang benar-benar didukung provider aktif yang ditampilkan.
+
+## 2. Interface
+
+```ts
+// src/lib/payments/types.ts
+export type ProviderCode = 'midtrans'; // tambah 'xendit' bila OD-03 dibuka kembali
+export type MethodType = 'qris' | 'ewallet' | 'virtual_account' | 'retail' | 'card';
+export type PaymentStatus = 'created' | 'pending' | 'paid' | 'expired' | 'failed' | 'cancelled' | 'refunded';
+
+export interface CreatePaymentInput {
+  paymentId: string;          // UUID internal → idempotency key / order_id
+  transactionCode: string;
+  amount: bigint;             // rupiah
+  method: { code: string; type: MethodType; providerChannel: string }; // mis. 'bca_va', 'gopay', 'qris'
+  customer: { name: string; email: string; phone?: string };
+  description: string;
+  expiresInMinutes: number;
+  successRedirectUrl: string; // hanya untuk UX, bukan bukti bayar
+}
+
+export interface PaymentInstruction {
+  kind: 'virtual_account' | 'qr' | 'redirect' | 'payment_code';
+  bankName?: string;
+  vaNumber?: string;
+  qrString?: string;          // dirender jadi gambar QR di server/client
+  qrImageUrl?: string;
+  paymentUrl?: string;        // deeplink / checkout URL e-wallet
+  paymentCode?: string;
+  expiresAt: Date;
+  raw?: Record<string, unknown>; // ter-redaksi
+}
+
+export interface CreatePaymentResult { providerRef: string; status: PaymentStatus; instruction: PaymentInstruction; }
+export interface StatusResult { providerRef: string; status: PaymentStatus; paidAmount?: bigint; paidAt?: Date; raw: unknown; }
+export interface VerifiedWebhook { eventId: string; providerRef: string; orderId: string; status: PaymentStatus; amount: bigint; raw: unknown; }
+
+export interface PaymentProvider {
+  readonly code: ProviderCode;
+  createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult>;
+  getPaymentStatus(ref: { providerRef: string; orderId: string }): Promise<StatusResult>;
+  verifyWebhook(req: { headers: Headers; rawBody: string }): Promise<VerifiedWebhook>; // throw bila tidak valid
+  getPaymentInstructions(payment: { providerRef: string; instruction: PaymentInstruction }): PaymentInstruction;
+  expirePayment(ref: { providerRef: string; orderId: string }): Promise<void>;
+}
+```
+
+Registry: `getProvider(code)` membaca konfigurasi env; provider tanpa kredensial dianggap **tidak terkonfigurasi** dan metodenya tidak tampil.
+
+## 3. Adapter
+
+> Endpoint & field persis **wajib diverifikasi ulang** terhadap dokumentasi resmi saat Development Step 5 (API provider berevolusi).
+
+### Midtrans (Core API)
+| Fungsi | Implementasi |
+|---|---|
+| createPayment | `POST {base}/v2/charge` dengan `payment_type` (`bank_transfer`, `qris`, `gopay`, `shopeepay`, `echannel` untuk Mandiri), `transaction_details.order_id = payment.id`, `gross_amount`, `custom_expiry` |
+| getPaymentStatus | `GET {base}/v2/{order_id}/status` |
+| verifyWebhook | `signature_key == SHA512(order_id + status_code + gross_amount + SERVER_KEY)`; lalu **cross-check** `getPaymentStatus` |
+| expirePayment | `POST {base}/v2/{order_id}/expire` (fallback `cancel`) |
+| Mapping status | `settlement`/`capture(accept)` → paid; `pending` → pending; `expire` → expired; `deny`/`failure` → failed; `cancel` → cancelled; `refund` → refunded |
+| Base URL | sandbox `https://api.sandbox.midtrans.com`, prod `https://api.midtrans.com` |
+
+### Xendit (referensi — ditunda, tidak diimplementasikan di MVP)
+| Fungsi | Implementasi |
+|---|---|
+| createPayment | Payments/Payment Request API (versi dipilih saat implementasi) dengan `reference_id = payment.id`, header `Idempotency-key = payment.id`, channel VA/QRIS/e-wallet |
+| getPaymentStatus | GET payment request by id |
+| verifyWebhook | header `x-callback-token` dibandingkan `XENDIT_WEBHOOK_TOKEN` (timing-safe), lalu cross-check status via API |
+| expirePayment | endpoint expire/cancel sesuai channel bila tersedia; bila tidak, cek status dan tandai lokal setelah dipastikan belum dibayar |
+| Mapping status | `SUCCEEDED` → paid; `PENDING`/`REQUIRES_ACTION` → pending; `EXPIRED` → expired; `FAILED` → failed; `CANCELED` → cancelled |
+
+## 4. State machine
+
+```mermaid
+stateDiagram-v2
+  [*] --> created
+  created --> pending: createPayment OK
+  created --> failed: createPayment error final
+  pending --> paid: webhook/status verified
+  pending --> expired: expiry + provider check
+  pending --> failed: provider failure
+  pending --> cancelled: ganti metode / batal
+  paid --> refunded: (masa depan, manual)
+  paid --> [*]
+```
+
+Status **transaksi** diturunkan dari payment aktif: `created` (belum ada payment), `pending`, `paid`, `expired`, `failed`, `cancelled`, `refunded`.
+
+## 5. Pemrosesan webhook (pseudocode)
+
+```ts
+POST /api/webhooks/[provider]
+  raw = await req.text()
+  event = insert payment_events {provider, raw(redacted), received_at, verification:'pending'}
+  try verified = provider.verifyWebhook({headers, raw})
+  catch → update event 'rejected'; return 401
+  if exists payment_events(provider, event_id=verified.eventId, processed=true) → return 200   // dedup
+  db.transaction(async tx => {
+    p = SELECT * FROM payments WHERE id = verified.orderId FOR UPDATE
+    if !p → mark 'unknown_payment'; return
+    if verified.amount !== p.amount → mark 'amount_mismatch'; alert; return
+    if !canTransition(p.status, verified.status) → mark 'ignored_transition'; return
+    UPDATE payments SET status, paid_at, provider_ref ...
+    if verified.status === 'paid':
+       updated = UPDATE transactions SET status='paid', paid_at=now(), receipt_no=nextval(...)
+                 WHERE id=p.transaction_id AND status <> 'paid' RETURNING *
+       if updated: UPDATE campaigns SET collected_amount += amount, donor_count += 1 WHERE id = ...
+    mark event processed
+  })
+  publish QStash notify(event, transactionId)   // dedup key = event:trx:channel
+  revalidateTag(`campaign:${slug}`)
+  return 200
+```
+
+Kunci idempotensi:
+- `payment_events UNIQUE(provider_id, provider_event_id)`
+- `payments UNIQUE(provider_id, provider_ref)`
+- Guard `WHERE status <> 'paid'` + `SELECT ... FOR UPDATE`
+- `notification_logs UNIQUE(dedup_key)`
+
+## 6. Rekonsiliasi
+- **Expiry job** (5 menit) dan **rekonsiliasi harian** memanggil `getPaymentStatus` lalu menggunakan fungsi yang sama `applyVerifiedStatus()` dengan webhook.
+- Selisih (provider paid, DB tidak; nominal beda; payment tak dikenal) → `audit_logs` aksi `reconciliation.issue` + email admin.
+- Admin dapat menekan "Cek status ke provider" (permission `transactions.reconcile`) — tetap melalui `applyVerifiedStatus()`.
+
+## 7. Instruksi pembayaran
+`payment_methods.instructions` (JSONB) menyimpan langkah per kanal (m-banking/ATM/internet banking) yang dapat diedit admin; data dinamis (nomor VA, QR, URL, expiry) berasal dari `payments.instruction` hasil provider. Template instruksi mendukung placeholder `{{va_number}}`, `{{amount}}`, `{{bank_name}}`.
+
+## 8. Metode awal (usulan, dikonfirmasi setelah akun merchant aktif)
+| Kode | Tipe | Provider utama | Fallback |
+|---|---|---|---|
+| qris | QRIS (`payment_type: qris`) | Midtrans | — |
+| gopay | e-wallet (`gopay`) | Midtrans | — |
+| shopeepay | e-wallet (`shopeepay`) | Midtrans | — |
+| bca_va, bni_va, bri_va, permata_va, cimb_va | VA (`bank_transfer` + `bank`) | Midtrans | — |
+| mandiri_bill | Mandiri Bill Payment (`echannel`: biller_code + bill_key) | Midtrans | — |
+
+Daftar final mengikuti metode yang **aktif di akun merchant Midtrans** (cek Dashboard → Settings → Payment). OVO/DANA tidak tersedia di MVP.
