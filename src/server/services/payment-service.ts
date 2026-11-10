@@ -11,6 +11,8 @@ import { cachedJson, invalidateCache } from "@/lib/redis/cache";
 import { sha256 } from "@/lib/security/crypto";
 import { siteUrl } from "@/lib/site";
 import { createPaymentInput } from "@/lib/validation/payment";
+import { formatRupiah } from "@/lib/money";
+import { renderInstructionSections, type InstructionSection } from "@/lib/payments/instruction-template";
 import {
   activatePayment,
   cancelPendingPayment,
@@ -18,6 +20,8 @@ import {
   findActiveMethodByCode,
   findActivePayment,
   findPayableTransaction,
+  findPaymentForView,
+  findTransactionStatus,
   insertCreatedPayment,
   listActiveMethodRows,
   markPaymentFailed,
@@ -345,8 +349,9 @@ async function createLocked(
       description: trx.campaignTitle,
       campaignId: trx.campaignId,
       expiresInMinutes: method.expiryMinutes,
-      // Tanpa access token: URL ini dikirim ke provider (callback e-wallet).
-      successRedirectUrl: `${siteUrl()}/transaksi/${trx.code}`,
+      // Callback e-wallet → halaman menunggu TANPA access token (URL ini tersimpan di Midtrans/
+      // log provider). Tanpa ?t= halaman hanya generik (payment-architecture.md §3c).
+      successRedirectUrl: `${siteUrl()}/transaksi/${trx.code}/menunggu`,
     });
   } catch (error) {
     await markPaymentFailed(paymentId, errorCode(error));
@@ -391,22 +396,121 @@ async function createLocked(
   return { ok: true, code: trx.code, reused: false, paymentId };
 }
 
-/** Placeholder halaman instruksi (P12 melengkapi): transaksi + payment aktif bila token sah. */
-export async function getInstructionView(code: string, token: string, now = new Date()) {
-  if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
+// ---------------------------------------------------------------------------------------------
+// Halaman instruksi / berhasil / menunggu & endpoint status (P12, T-21). Hanya MEMBACA DB —
+// tidak memanggil provider dan tidak mengubah status apa pun (BR-18).
+
+const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+/** Skema deeplink e-wallet yang boleh dijadikan href (bukan javascript:/data:). */
+const SAFE_PAYMENT_URL = /^(https:\/\/|gojek:\/\/|shopeeid:\/\/)/i;
+
+export type PaymentDisplayStatus = "pending" | "paid" | "expired" | "failed" | "cancelled";
+
+/** Data dinamis instruksi yang aman untuk client (tanpa raw provider/QR image URL). */
+export interface PaymentDetails {
+  kind: "virtual_account" | "qr" | "redirect" | "payment_code";
+  bankName: string | null;
+  vaNumber: string | null;
+  billerCode: string | null;
+  billKey: string | null;
+  qrString: string | null;
+  paymentUrl: string | null;
+}
+
+/** DTO halaman transaksi — tanpa email/telepon/nama donatur dan tanpa id internal. */
+export interface TransactionView {
+  transaction: {
+    code: string;
+    amount: bigint;
+    status: string;
+    campaignTitle: string;
+    campaignSlug: string;
+    createdAt: Date;
+    paidAt: Date | null;
+  };
+  payment: {
+    status: PaymentDisplayStatus;
+    methodName: string;
+    methodType: MethodRow["type"];
+    expiresAt: Date | null;
+    details: PaymentDetails | null;
+    steps: InstructionSection[];
+  } | null;
+}
+
+const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
+
+function toDetails(raw: unknown): PaymentDetails | null {
+  if (!raw || typeof raw !== "object") return null;
+  const i = raw as Record<string, unknown>;
+  const kind = i.kind;
+  if (kind !== "virtual_account" && kind !== "qr" && kind !== "redirect" && kind !== "payment_code") return null;
+  const url = str(i.paymentUrl);
+  return {
+    kind,
+    bankName: str(i.bankName),
+    vaNumber: str(i.vaNumber),
+    billerCode: str(i.billerCode),
+    billKey: str(i.billKey) ?? str(i.paymentCode),
+    qrString: str(i.qrString),
+    paymentUrl: url && SAFE_PAYMENT_URL.test(url) ? url : null,
+  };
+}
+
+function displayStatus(trxStatus: string, paymentStatus: string, expiresAt: Date | null, now: Date): PaymentDisplayStatus {
+  if (trxStatus === "paid" || paymentStatus === "paid") return "paid";
+  if (paymentStatus === "pending") return expiresAt && expiresAt <= now ? "expired" : "pending";
+  if (paymentStatus === "expired" || paymentStatus === "failed" || paymentStatus === "cancelled") return paymentStatus;
+  return "failed";
+}
+
+/** Data halaman /transaksi/[code]/*; null = 404 (token salah/kedaluwarsa). */
+export async function getTransactionView(code: string, token: string, now = new Date()): Promise<TransactionView | null> {
+  if (!TOKEN_PATTERN.test(token)) return null;
   const trx = await findPayableTransaction(code, sha256(token), now);
   if (!trx) return null;
-  const active = await findActivePayment(trx.id);
-  // DTO minimal: tanpa email/telepon/nama donatur dan tanpa id internal.
+  const p = await findPaymentForView(trx.id);
+  let payment: TransactionView["payment"] = null;
+  if (p) {
+    const details = toDetails(p.instruction);
+    const vars = {
+      va_number: (details?.kind === "payment_code" ? details.billKey : details?.vaNumber) ?? undefined,
+      bank_name: details?.bankName ?? undefined,
+      amount: formatRupiah(trx.amount),
+    };
+    payment = {
+      status: displayStatus(trx.status, p.status, p.expiresAt, now),
+      methodName: p.methodName,
+      methodType: p.methodType,
+      expiresAt: p.expiresAt,
+      details,
+      steps: renderInstructionSections(p.instructions, vars),
+    };
+  }
   return {
     transaction: {
       code: trx.code,
       amount: trx.amount,
       status: trx.status,
       campaignTitle: trx.campaignTitle,
+      campaignSlug: trx.campaignSlug,
+      createdAt: trx.createdAt,
+      paidAt: trx.paidAt,
     },
-    payment: active ? { status: active.status, methodCode: active.methodCode } : null,
+    payment,
   };
+}
+
+/** Endpoint polling: {status, paidAt} dari DB saja; null = 404. */
+export async function getTransactionStatus(
+  code: string,
+  token: string,
+  now = new Date(),
+): Promise<{ status: string; paidAt: string | null } | null> {
+  if (!TOKEN_PATTERN.test(token)) return null;
+  const row = await findTransactionStatus(code, sha256(token), now);
+  if (!row) return null;
+  return { status: row.status, paidAt: row.paidAt ? row.paidAt.toISOString() : null };
 }
 
 /**

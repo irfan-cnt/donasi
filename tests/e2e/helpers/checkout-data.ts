@@ -56,3 +56,51 @@ export async function expireSandboxCharge(orderId: string): Promise<void> {
 export function sandboxConfigured(): boolean {
   return (process.env.MIDTRANS_SERVER_KEY ?? "").startsWith("SB-Mid-server-") && process.env.MIDTRANS_IS_PRODUCTION !== "true";
 }
+
+/**
+ * Seed transaksi + payment langsung di DB (KHUSUS TEST, branch dev) untuk state yang tidak bisa
+ * dibuat lewat UI tanpa provider: kedaluwarsa, paid (simulasi hasil webhook), pending tanpa charge.
+ * Tidak ada charge Midtrans yang dibuat. Dibersihkan via cleanupCheckout([email]).
+ */
+export async function seedTransaction(opts: {
+  slug: string;
+  email: string;
+  status: "pending" | "paid";
+  method?: string;
+  expiresInMinutes?: number;
+  instruction?: Record<string, unknown>;
+}): Promise<{ code: string; token: string; transactionId: string; paymentId: string }> {
+  const { randomBytes, createHash, randomUUID } = await import("node:crypto");
+  const db = sql();
+  const token = randomBytes(32).toString("base64url");
+  const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+  const rand = Array.from(randomBytes(6), (b) => alphabet[b % 32]).join("");
+  const code = `TK-000000-${rand}`;
+  const [c] = await db`select id, title from campaigns where slug = ${opts.slug}`;
+  const [m] = await db`select id, provider_id from payment_methods where code = ${opts.method ?? "bni_va"} limit 1`;
+  if (!c || !m) throw new Error("campaign/metode seed tidak ditemukan");
+  const donorId = randomUUID();
+  await db`insert into donors (id, email, name) values (${donorId}, ${opts.email}, 'Donatur Uji Seed')
+    on conflict do nothing`;
+  const [donor] = await db`select id from donors where email = ${opts.email}`;
+  const transactionId = randomUUID();
+  const paymentId = randomUUID();
+  const paidAt = opts.status === "paid" ? new Date() : null;
+  await db`insert into transactions (id, code, access_token_hash, access_token_expires_at, campaign_id, donor_id, amount,
+      status, paid_at, campaign_title_snapshot, donor_name_snapshot, donor_email_snapshot)
+    values (${transactionId}, ${code}, ${createHash("sha256").update(token).digest()}, now() + interval '1 day', ${c.id},
+      ${donor!.id}, '50000', ${opts.status}, ${paidAt}, ${c.title}, 'Donatur Uji Seed', ${opts.email})`;
+  const instruction = opts.instruction ?? { kind: "virtual_account", bankName: "BNI", vaNumber: "9880000000000001" };
+  await db`insert into payments (id, transaction_id, payment_method_id, provider_id, amount, status, provider_ref, instruction,
+      expires_at, paid_at)
+    values (${paymentId}, ${transactionId}, ${m.id}, ${m.provider_id}, '50000', ${opts.status}, ${`e2e-${paymentId}`},
+      ${JSON.stringify(instruction)}::jsonb, now() + make_interval(mins => ${opts.expiresInMinutes ?? 60}), ${paidAt})`;
+  return { code, token, transactionId, paymentId };
+}
+
+/** KHUSUS TEST: simulasikan hasil applyVerifiedStatus pada baris seed (bukan charge nyata). */
+export async function markSeededPaid(transactionId: string, paymentId: string): Promise<void> {
+  const db = sql();
+  await db`update payments set status = 'paid', paid_at = now() where id = ${paymentId}`;
+  await db`update transactions set status = 'paid', paid_at = now() where id = ${transactionId}`;
+}

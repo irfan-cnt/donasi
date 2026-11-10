@@ -5,10 +5,30 @@ type Fields = Record<string, unknown>;
 
 const REDACT_KEYS = /(secret|password|token|authorization|cookie|key)/i;
 
-function redact(fields: Fields): Fields {
+// Access token transaksi (?t=), token pratinjau (?token=) dll. di URL/query string — juga bentuk
+// ter-encode (%3Ft%3D… / %26t%3D…, mis. di callbackUrl). security.md §2: tidak pernah masuk log.
+const URL_TOKEN = /((?:[?&]|%3F|%26)(?:t|token|access_token|code_verifier)(?:=|%3D))[^&#\s"'%]+/gi;
+
+/** Samarkan nilai parameter token di URL/teks apa pun. */
+export function redactUrlTokens(text: string): string {
+  return text.replace(URL_TOKEN, "$1[REDACTED]");
+}
+
+function redactValue(v: unknown, depth: number): unknown {
+  if (typeof v === "string") return redactUrlTokens(v);
+  if (typeof v === "bigint") return v.toString();
+  if (v instanceof URL) return redactUrlTokens(v.toString());
+  if (depth < 3 && Array.isArray(v)) return v.map((x) => redactValue(x, depth + 1));
+  if (depth < 3 && v && typeof v === "object" && Object.getPrototypeOf(v) === Object.prototype) {
+    return redact(v as Fields, depth + 1);
+  }
+  return v;
+}
+
+export function redact(fields: Fields, depth = 0): Fields {
   const out: Fields = {};
   for (const [k, v] of Object.entries(fields)) {
-    out[k] = REDACT_KEYS.test(k) ? "[REDACTED]" : typeof v === "bigint" ? v.toString() : v;
+    out[k] = REDACT_KEYS.test(k) ? "[REDACTED]" : redactValue(v, depth);
   }
   return out;
 }
@@ -27,7 +47,7 @@ export function createLogger(base: Fields = {}): Logger {
     const line = JSON.stringify({
       ts: new Date().toISOString(),
       level,
-      msg,
+      msg: redactUrlTokens(msg),
       ...redact({ ...base, ...fields }),
     });
     if (level === "error") console.error(line);

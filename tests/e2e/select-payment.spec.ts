@@ -59,7 +59,7 @@ test("menampilkan metode aktif per grup tanpa overflow (360/768/1280)", async ({
   expect(errors).toEqual([]);
 });
 
-test("pilih VA → payment sandbox dibuat → halaman instruksi (placeholder)", async ({ page }) => {
+test("pilih VA → payment sandbox dibuat → halaman instruksi", async ({ page }) => {
   test.skip(!sandboxConfigured(), "Midtrans sandbox tidak dikonfigurasi");
   const errors = collectConsoleErrors(page);
   const { code, token } = await checkoutToPayment(page);
@@ -67,9 +67,9 @@ test("pilih VA → payment sandbox dibuat → halaman instruksi (placeholder)", 
   await page.getByRole("button", { name: /^Bayar Rp/ }).click();
   await page.waitForURL(new RegExp(`/transaksi/${code}/instruksi\\?t=`), { timeout: 30_000 });
   expect(new URL(page.url()).searchParams.get("t")).toBe(token);
-  const summary = page.getByRole("region", { name: "Ringkasan pembayaran" });
-  await expect(summary.getByTestId("trx-code")).toHaveText(code);
-  await expect(summary.getByTestId("payment-status")).toHaveText("Menunggu pembayaran");
+  const panel = page.getByRole("region", { name: "Instruksi pembayaran" });
+  await expect(panel.getByTestId("trx-code")).toHaveText(code);
+  await expect(panel.getByTestId("va-number")).toHaveText(/^\d+$/);
   expect(errors).toEqual([]);
 });
 

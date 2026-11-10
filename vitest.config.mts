@@ -7,6 +7,7 @@ export default defineConfig({
   resolve: { tsconfigPaths: true },
   test: {
     environment: "node",
+    testTimeout: 20_000, // integration test ke Neon bisa lambat
     include: ["tests/unit/**/*.test.ts", "tests/integration/**/*.test.ts"],
     exclude: ["node_modules", "design-mockups/**", "tests/e2e/**"],
     alias: { "server-only": new URL("./tests/stubs/server-only.ts", import.meta.url).pathname },

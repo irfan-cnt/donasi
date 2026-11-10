@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { getDb, getTxDb } from "@/lib/db";
 import {
   auditLogs,
@@ -86,6 +86,8 @@ export async function findPayableTransaction(code: string, tokenHash: Buffer, no
       donorEmail: transactions.donorEmailSnapshot,
       isAnonymous: transactions.isAnonymous,
       donorPhone: transactions.donorPhoneSnapshot,
+      createdAt: transactions.createdAt,
+      paidAt: transactions.paidAt,
     })
     .from(transactions)
     .innerJoin(campaigns, eq(transactions.campaignId, campaigns.id))
@@ -241,4 +243,53 @@ export async function recordOrphanCharge(m: {
         metadata: m,
       }),
     );
+}
+
+/** Status ringan untuk endpoint polling (P12): hanya bila kode + hash token cocok & berlaku. */
+export async function findTransactionStatus(code: string, tokenHash: Buffer, now: Date) {
+  const [row] = await getDb()
+    .select({ status: transactions.status, paidAt: transactions.paidAt })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.code, code),
+        eq(transactions.accessTokenHash, tokenHash),
+        gt(transactions.accessTokenExpiresAt, now),
+      ),
+    )
+    .limit(1);
+  return row;
+}
+
+export interface PaymentViewRow {
+  status: "created" | "pending" | "paid" | "expired" | "failed" | "cancelled" | "refunded";
+  instruction: unknown;
+  expiresAt: Date | null;
+  methodCode: string;
+  methodType: MethodRow["type"];
+  methodName: string;
+  instructions: unknown;
+}
+
+/**
+ * Payment untuk halaman instruksi/hasil: payment aktif (pending/paid) bila ada, selain itu payment
+ * terakhir (expired/failed/cancelled) agar state kedaluwarsa/gagal bisa ditampilkan.
+ */
+export async function findPaymentForView(transactionId: string): Promise<PaymentViewRow | undefined> {
+  const [row] = await getDb()
+    .select({
+      status: payments.status,
+      instruction: payments.instruction,
+      expiresAt: payments.expiresAt,
+      methodCode: paymentMethods.code,
+      methodType: paymentMethods.type,
+      methodName: paymentMethods.displayName,
+      instructions: paymentMethods.instructions,
+    })
+    .from(payments)
+    .innerJoin(paymentMethods, eq(payments.paymentMethodId, paymentMethods.id))
+    .where(and(eq(payments.transactionId, transactionId), sql`${payments.status} <> 'created'`))
+    .orderBy(sql`(${payments.status} IN ('pending', 'paid')) DESC`, desc(payments.createdAt), desc(payments.id))
+    .limit(1);
+  return row as PaymentViewRow | undefined;
 }

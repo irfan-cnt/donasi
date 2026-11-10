@@ -105,12 +105,18 @@ async function donationGate(request: NextRequest) {
 }
 
 // Halaman transaksi /transaksi/[code]/* (instruksi P11, status P12): hanya dengan kode + access
-// token sah (?t=), selain itu 404.
+// token sah (?t=), selain itu 404. Pengecualian: /transaksi/[code]/menunggu TANPA ?t= (target
+// callback e-wallet Midtrans, yang sengaja tidak memuat token) → halaman generik tanpa data
+// transaksi apa pun dan tanpa query DB (payment-architecture.md §3c).
 async function transactionGate(request: NextRequest) {
   const match = /^\/transaksi\/([^/]+)(?:\/.*)?$/.exec(request.nextUrl.pathname);
+  const waiting = /^\/transaksi\/[^/]+\/menunggu\/?$/.test(request.nextUrl.pathname);
   if (!match) return notFoundResponse(request);
   const code = match[1]!;
   const token = request.nextUrl.searchParams.get("t") ?? "";
+  if (waiting && !request.nextUrl.searchParams.has("t")) {
+    return isTransactionCode(code) ? NextResponse.next() : notFoundResponse(request);
+  }
   try {
     const ok =
       isTransactionCode(code) &&

@@ -28,7 +28,7 @@
 ## 3. Otorisasi
 - Fungsi `requireDonor()`, `requireAdmin(permission)` dipanggil di **setiap** server action, route handler, dan halaman server. Middleware hanya lapisan pertama.
 - Query donor selalu memfilter `donor_id` dari sesi.
-- Akses transaksi publik (instruksi/pending/success) memakai `access_token` 32 byte acak (hash disimpan di DB), dikirim di URL path/query hanya untuk pemilik; berlaku 7 hari; tidak pernah dicatat di log/analytics (redaksi).
+- Akses transaksi publik (instruksi/pending/success) memakai `access_token` 32 byte acak (hash disimpan di DB), dikirim di URL path/query hanya untuk pemilik; berlaku 7 hari; tidak pernah dicatat di log/analytics (redaksi). Implementasi (P12): `redactUrlTokens` di `src/lib/logger.ts` (msg + field bertingkat, termasuk bentuk ter-encode); halaman ber-token `noindex` + `no-referrer`; endpoint `GET /api/transactions/{code}/status` hanya `{status, paidAt}`, `no-store`, rate limit, 404 untuk token salah. `callback_url` e-wallet ke Midtrans tidak memuat token — `/transaksi/{code}/menunggu` tanpa `?t=` hanya menampilkan halaman generik tanpa data (payment-architecture.md §3c).
 
 ## 4. Validasi input
 - Zod di semua boundary; `bigint` untuk nominal; batas panjang string; normalisasi email & nomor.
