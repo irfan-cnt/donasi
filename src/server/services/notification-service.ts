@@ -9,6 +9,9 @@ import {
   type AdminAlertJob,
   type DonorJob,
   type NotifyJob,
+  type WhatsappJob,
+  WHATSAPP_EVENTS,
+  whatsappSource,
 } from "@/lib/notifications/jobs";
 import {
   redactPayload,
@@ -18,25 +21,27 @@ import {
 } from "@/lib/notifications/template";
 import { renderInstructionSections } from "@/lib/payments/instruction-template";
 import { SITE_NAME } from "@/lib/site";
+import { FonnteError, toFonnteTarget, type WhatsappSender } from "@/lib/whatsapp/fonnte";
 import {
   claimNotificationLog,
   findActiveTemplate,
   findNotificationContext,
   findOrganizationSettings,
+  findWhatsappEnabledSetting,
   updateNotificationLog,
   type NotificationContext,
 } from "@/server/repositories/notification-repository";
 
 // Handler notifikasi (T-28/T-29/T-31, F-19, BR-30–BR-32). Alur: job → konteks DB → template aktif
 // per kanal → consent → kirim → notification_logs (satu baris per kanal yang diharapkan, termasuk
-// `skipped`, dedup_key event:ref:channel). Kegagalan TIDAK PERNAH mengubah status pembayaran
+// `skipped`, dedup_key event:ref:channel). WhatsApp (P17) dikirim lewat job `whatsapp.send` terpisah. Kegagalan TIDAK PERNAH mengubah status pembayaran
 // (BR-31): modul ini tidak menulis payments/transactions. SMTP gagal → baris `failed` + error
 // dilempar → 500 → QStash retry (3×).
 
 export interface NotifyConfig {
   /** NOTIFICATIONS_ENABLED. false → semua kanal dicatat `skipped`. */
   enabled: boolean;
-  /** WHATSAPP_ENABLED (kanal sendiri dibuat P17). */
+  /** WHATSAPP_ENABLED (P17). */
   whatsappEnabled: boolean;
   adminEmail: string | null;
   dailyLimit: number;
@@ -50,10 +55,16 @@ export interface NotifyDeps {
   config: NotifyConfig;
   /** Alert kuota > 80% (dikirim lewat job admin.alert terpisah). */
   publishAdminAlert: (job: AdminAlertJob, log: Logger) => Promise<void>;
+  /** P17: klien Fonnte (fetch di-inject di test; tanpa retry internal). */
+  whatsapp: WhatsappSender;
+  /** P17: publish job `whatsapp.send` (QStash flow control global FONNTE_MIN_DELAY_MS). */
+  publishWhatsapp: (job: WhatsappJob, log: Logger) => Promise<void>;
+  /** platform_settings notifications.whatsapp_enabled (default: baca DB). */
+  whatsappSetting?: () => Promise<boolean>;
   now?: () => Date;
 }
 
-export type ChannelOutcome = "sent" | "failed" | "skipped" | "duplicate";
+export type ChannelOutcome = "sent" | "failed" | "skipped" | "duplicate" | "queued";
 
 export interface NotifySummary {
   event: string;
@@ -249,31 +260,142 @@ export class NotificationDeliveryError extends Error {
   }
 }
 
-/** Kanal WhatsApp (Fonnte) dibuat di P17: tulis `skipped` agar drain outbox §6a menganggapnya tertangani. */
+/** Gate kanal WhatsApp (BR-26) selain opt-in; null = boleh kirim. Urutan = alasan paling informatif. */
+async function whatsappSkipReason(
+  event: string,
+  ctx: NotificationContext,
+  deps: NotifyDeps,
+  stale: string | null,
+): Promise<string | null> {
+  if (stale) return stale;
+  if (!deps.config.enabled) return "NOTIFICATIONS_ENABLED=false";
+  if (!deps.config.whatsappEnabled) return "WHATSAPP_ENABLED=false";
+  if (!(WHATSAPP_EVENTS as readonly string[]).includes(event)) return "event tanpa notifikasi WhatsApp";
+  if (!(await (deps.whatsappSetting ?? findWhatsappEnabledSetting)())) {
+    return "pengaturan notifications.whatsapp_enabled=false";
+  }
+  if (!ctx.donorPhone) return "nomor WhatsApp kosong";
+  if (!toFonnteTarget(ctx.donorPhone)) return "nomor WhatsApp tidak valid";
+  return null;
+}
+
+/**
+ * Tahap 1 kanal WA (dalam job event asal): consent & gate → baris `skipped`, atau baris `queued` +
+ * publish job `whatsapp.send` (flow control global FONNTE_MIN_DELAY_MS) agar email tidak tertunda.
+ * Setiap kanal yang diharapkan selalu mendapat baris (drain outbox §6a).
+ */
 async function recordWhatsapp(job: DonorJob, ctx: NotificationContext, deps: NotifyDeps, stale: string | null) {
+  // BR-26: consent = centang WA pada transaksi (snapshot saat checkout). Tanpa opt-in → tidak ada baris.
   if (!ctx.whatsappOptIn) return undefined;
-  const reason =
-    stale ??
-    (!ctx.donorPhone
-      ? "nomor WhatsApp kosong"
-      : !deps.config.enabled
-        ? "NOTIFICATIONS_ENABLED=false"
-        : deps.config.whatsappEnabled
-          ? "kanal WhatsApp belum diimplementasikan (P17)"
-          : "WHATSAPP_ENABLED=false");
+  const reason = await whatsappSkipReason(job.event, ctx, deps, stale);
+  const template = reason ? null : await findActiveTemplate(job.event, "whatsapp");
+  const skip = reason ?? (template ? null : "template WhatsApp tidak aktif");
   const claimed = await claimNotificationLog({
     channel: "whatsapp",
     recipient: ctx.donorPhone ?? "-",
     event: job.event,
     dedupKey: dedupKey(job, "whatsapp"),
     transactionId: job.transactionId,
-    templateId: null,
-    templateVersion: null,
+    templateId: template?.id ?? null,
+    templateVersion: template?.version ?? null,
     requestPayload: null,
-    status: "skipped",
+    status: skip ? "skipped" : "queued",
+    errorMessage: skip,
+  });
+  if (!claimed.created && (claimed.status === "sent" || claimed.status === "skipped")) {
+    return "duplicate" as const;
+  }
+  if (skip) {
+    if (!claimed.created) await updateNotificationLog(claimed.id, { status: "skipped", errorMessage: skip });
+    return "skipped" as const;
+  }
+  // queued/failed: (publish ulang) job kirim. Dedup id QStash per sumber+ref; dedup_key menjaga sekali kirim.
+  await deps.publishWhatsapp(
+    { event: "whatsapp.send", source: job.event as WhatsappJob["source"], transactionId: job.transactionId, paymentId: job.paymentId },
+    deps.log,
+  );
+  return "queued" as const;
+}
+
+const WA_ALERT_CODES = new Set(["invalid_token", "device_disconnected"]);
+
+/** Tahap 2 (job `whatsapp.send`): cek ulang gate, render template, kirim via Fonnte, perbarui log. */
+async function handleWhatsappJob(job: WhatsappJob, deps: NotifyDeps, now: Date): Promise<NotifySummary> {
+  const source = whatsappSource(job);
+  const ctx = await findNotificationContext(job.transactionId, job.paymentId);
+  if (!ctx || !ctx.payment) {
+    deps.log.warn("notify: transaksi/payment tidak ditemukan; diabaikan", { event: job.event });
+    return { event: job.event, ignored: "not_found" };
+  }
+  const stale =
+    job.source === "payment.pending" && ctx.payment.status !== "pending"
+      ? `status payment sudah ${ctx.payment.status}`
+      : null;
+  const template = await findActiveTemplate(job.source, "whatsapp");
+  const vars = buildVars(ctx, deps.config.siteUrl);
+  const reason = !ctx.whatsappOptIn
+    ? "tanpa consent WhatsApp"
+    : ((await whatsappSkipReason(job.source, ctx, deps, stale)) ?? (template ? null : "template WhatsApp tidak aktif"));
+  const claimed = await claimNotificationLog({
+    channel: "whatsapp",
+    recipient: ctx.donorPhone ?? "-",
+    event: job.source,
+    dedupKey: dedupKey(source, "whatsapp"),
+    transactionId: job.transactionId,
+    templateId: template?.id ?? null,
+    templateVersion: template?.version ?? null,
+    requestPayload: null,
+    status: reason ? "skipped" : "queued",
     errorMessage: reason,
   });
-  return claimed.created ? ("skipped" as const) : ("duplicate" as const);
+  if (!claimed.created && (claimed.status === "sent" || claimed.status === "skipped")) {
+    return { event: job.event, whatsapp: "duplicate" };
+  }
+  if (reason) {
+    if (!claimed.created) await updateNotificationLog(claimed.id, { status: "skipped", errorMessage: reason });
+    return { event: job.event, whatsapp: "skipped" };
+  }
+  const attempt = claimed.attempt + 1;
+  const payload = redactPayload(vars);
+  try {
+    const res = await deps.whatsapp.send({
+      target: toFonnteTarget(ctx.donorPhone)!,
+      message: renderTemplate(template!.body, vars),
+    });
+    await updateNotificationLog(claimed.id, {
+      status: "sent",
+      attempt,
+      sent: true,
+      errorMessage: null,
+      providerResponse: { ...res },
+      requestPayload: payload,
+      templateId: template!.id,
+      templateVersion: template!.version,
+    });
+    return { event: job.event, whatsapp: "sent" };
+  } catch (e) {
+    const fe = e instanceof FonnteError ? e : null;
+    const code = fe ? `fonnte:${fe.code}` : safeErrorCode(e);
+    await updateNotificationLog(claimed.id, {
+      status: "failed",
+      attempt,
+      errorMessage: code,
+      providerResponse: fe?.response ?? null,
+      requestPayload: payload,
+    });
+    deps.log.error("whatsapp: kirim gagal", { event: job.source, attempt, error: code });
+    if (fe && WA_ALERT_CODES.has(fe.code)) {
+      await deps
+        .publishAdminAlert(
+          { event: "admin.alert", kind: "whatsapp", alert: fe.code, date: jakartaDay(now) },
+          deps.log,
+        )
+        .catch((err: unknown) => deps.log.error("publish alert WhatsApp gagal", { error: safeErrorCode(err) }));
+    }
+    // Gagal permanen (token/device/nomor/kuota) → tidak di-retry; admin bisa kirim ulang (P23).
+    if (fe && !fe.retryable) return { event: job.event, whatsapp: "failed" };
+    throw new NotificationDeliveryError(code);
+  }
 }
 
 async function handleDonorJob(job: DonorJob, deps: NotifyDeps, now: Date): Promise<NotifySummary> {
@@ -317,7 +439,14 @@ async function handleDonorJob(job: DonorJob, deps: NotifyDeps, now: Date): Promi
     email = "failed";
   }
   // WA dicatat walau email gagal, agar retry tidak menunda kanal lain.
-  const whatsapp = await recordWhatsapp(job, ctx, deps, stale);
+  let whatsapp: ChannelOutcome | undefined;
+  try {
+    whatsapp = await recordWhatsapp(job, ctx, deps, stale);
+  } catch (e) {
+    // Publish job WA gagal → baris tetap `queued`; 500 → QStash retry job asal (email sudah dedup).
+    deps.log.error("whatsapp: publish job gagal", { event: job.event, error: safeErrorCode(e) });
+    deliveryError ??= e;
+  }
   if (deliveryError) throw deliveryError;
   return { event: job.event, email, whatsapp };
 }
@@ -339,6 +468,15 @@ export function renderAdminAlert(job: AdminAlertJob): { subject: string; body: s
   if (job.kind === "reconciliation") {
     title = `Rekonsiliasi ${job.date ?? ""}: ada temuan`;
     lines.push("Job rekonsiliasi harian menemukan selisih/temuan berikut:");
+  } else if (job.kind === "whatsapp") {
+    title =
+      job.alert === "invalid_token"
+        ? "Token Fonnte ditolak — WhatsApp tidak terkirim"
+        : "Device WhatsApp Fonnte terputus — WhatsApp tidak terkirim";
+    lines.push(
+      `Jenis: ${job.alert ?? "-"}`,
+      "Periksa device & token di dashboard Fonnte. Pesan yang gagal bisa dikirim ulang dari admin (P23).",
+    );
   } else if (job.kind === "email_quota") {
     title = "Kuota email harian hampir habis";
     lines.push("Jumlah email hari ini sudah melewati 80% batas EMAIL_DAILY_LIMIT.");
@@ -398,5 +536,6 @@ export async function processNotifyJob(body: unknown, deps: NotifyDeps): Promise
     return { event: job.event, ignored: "not_implemented" };
   }
   if (job.event === "admin.alert") return handleAdminAlert(job, deps, now);
+  if (job.event === "whatsapp.send") return handleWhatsappJob(job, deps, now);
   return handleDonorJob(job, deps, now);
 }

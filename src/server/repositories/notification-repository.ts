@@ -161,3 +161,13 @@ export async function updateNotificationLog(
     .set({ ...rest, ...(sent ? { sentAt: sql`now()` } : {}) })
     .where(eq(notificationLogs.id, id));
 }
+
+/** platform_settings `notifications.whatsapp_enabled` (P17). Hanya nilai boolean `true` yang mengaktifkan. */
+export async function findWhatsappEnabledSetting(): Promise<boolean> {
+  const [row] = await getDb()
+    .select({ value: platformSettings.value })
+    .from(platformSettings)
+    .where(eq(platformSettings.key, "notifications.whatsapp_enabled"))
+    .limit(1);
+  return row?.value === true;
+}

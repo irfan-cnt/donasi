@@ -14,7 +14,13 @@ export function getQStash(): Client {
 export async function publishJob(
   url: string,
   body: unknown,
-  options: { delaySeconds?: number; deduplicationId?: string; retries?: number } = {},
+  options: {
+    delaySeconds?: number;
+    deduplicationId?: string;
+    retries?: number;
+    /** P17: antrean global (mis. jeda antar pesan WA): `rate` pesan per `periodSeconds`. */
+    flowControl?: { key: string; parallelism: number; rate: number; periodSeconds: number };
+  } = {},
 ): Promise<string> {
   const env = getEnv();
   // Preview dilindungi Vercel Deployment Protection: teruskan header bypass (tidak pernah di production).
@@ -26,6 +32,14 @@ export async function publishJob(
     delay: options.delaySeconds,
     deduplicationId: options.deduplicationId,
     retries: options.retries,
+    flowControl: options.flowControl
+      ? {
+          key: options.flowControl.key,
+          parallelism: options.flowControl.parallelism,
+          rate: options.flowControl.rate,
+          period: options.flowControl.periodSeconds,
+        }
+      : undefined,
   });
   return res.messageId;
 }

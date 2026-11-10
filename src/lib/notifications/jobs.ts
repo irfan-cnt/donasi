@@ -25,7 +25,21 @@ export const receiptJobSchema = z.object({
   transactionId: uuid,
 });
 
-export const ADMIN_ALERT_KINDS = ["reconciliation", "payment", "email_quota"] as const;
+/** Event donor yang punya template WhatsApp (notification-architecture.md §Event → kanal). */
+export const WHATSAPP_EVENTS = ["payment.pending", "payment.paid", "payment.failed"] as const;
+
+/**
+ * P17: kirim WA sebagai job QStash terpisah (flow control global FONNTE_MIN_DELAY_MS) agar email
+ * tidak tertunda. Baris notification_logs `{source}:…:whatsapp` sudah dibuat (queued) oleh job asal.
+ */
+export const whatsappJobSchema = z.object({
+  event: z.literal("whatsapp.send"),
+  source: z.enum(WHATSAPP_EVENTS),
+  transactionId: uuid,
+  paymentId: uuid,
+});
+
+export const ADMIN_ALERT_KINDS = ["reconciliation", "payment", "email_quota", "whatsapp"] as const;
 
 export const adminAlertJobSchema = z.object({
   event: z.literal("admin.alert"),
@@ -51,9 +65,11 @@ export const notifyJobSchema = z.discriminatedUnion("event", [
   donorJobSchema,
   receiptJobSchema,
   adminAlertJobSchema,
+  whatsappJobSchema,
 ]);
 
 export type DonorJob = z.infer<typeof donorJobSchema>;
+export type WhatsappJob = z.infer<typeof whatsappJobSchema>;
 export type AdminAlertJob = z.infer<typeof adminAlertJobSchema>;
 export type NotifyJob = z.infer<typeof notifyJobSchema>;
 
@@ -63,6 +79,7 @@ export type NotifyJob = z.infer<typeof notifyJobSchema>;
  * attempt (ganti metode, BR-17) → `event:trx:payment:channel`.
  */
 export function dedupRef(job: NotifyJob): string {
+  if (job.event === "whatsapp.send") return dedupRef(whatsappSource(job));
   if (job.event === "admin.alert") return `${job.kind}:${job.alert ?? "all"}:${job.ref ?? job.date ?? "-"}`;
   if (job.event === "payment.pending" || job.event === "payment.failed") {
     return `${job.transactionId}:${job.paymentId}`;
@@ -70,11 +87,23 @@ export function dedupRef(job: NotifyJob): string {
   return job.transactionId;
 }
 
-export const dedupKey = (job: NotifyJob, channel: "email" | "whatsapp") =>
-  `${job.event}:${dedupRef(job)}:${channel}`;
+/** Job donor asal dari job whatsapp.send (dedup_key WA = milik event asal). */
+export const whatsappSource = (job: WhatsappJob): DonorJob => ({
+  event: job.source,
+  transactionId: job.transactionId,
+  paymentId: job.paymentId,
+});
+
+export const dedupKey = (job: NotifyJob, channel: "email" | "whatsapp"): string =>
+  job.event === "whatsapp.send"
+    ? dedupKey(whatsappSource(job), "whatsapp")
+    : `${job.event}:${dedupRef(job)}:${channel}`;
 
 /** Dedup id QStash (tanpa ':' agar konsisten dengan id yang sudah dipakai, mis. payment-paid-{trx}). */
 export function qstashDedupId(job: NotifyJob): string {
+  if (job.event === "whatsapp.send") {
+    return `wa-${job.source}-${dedupRef(job)}`.replace(/[^A-Za-z0-9_-]/g, "-");
+  }
   if (job.event === "payment.paid") return `payment-paid-${job.transactionId}`;
   if (job.event === "payment.pending") return `payment-pending-${job.paymentId}`;
   if (job.event === "admin.alert" && job.kind === "reconciliation") return `reconcile-alert-${job.date}`;

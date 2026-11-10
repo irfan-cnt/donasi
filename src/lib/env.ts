@@ -90,7 +90,16 @@ export const serverEnvSchema = z
     NOTIFICATIONS_ENABLED: booleanFlag,
     WHATSAPP_ENABLED: booleanFlag,
     FONNTE_TOKEN: optionalString,
-    FONNTE_API_URL: optionalString,
+    // P17: endpoint kirim Fonnte (docs.fonnte.com/api-send-message). Wajib https.
+    FONNTE_API_URL: z.preprocess(
+      (v) => (v === "" ? undefined : v),
+      z.url({ protocol: /^https$/ }).default("https://api.fonnte.com/send"),
+    ),
+    // P17: jeda minimal antar pesan WA (global, satu nomor pengirim) via QStash flow control.
+    FONNTE_MIN_DELAY_MS: z.preprocess(
+      (v) => (v === "" ? undefined : v),
+      z.coerce.number().int().min(1000).max(600_000).default(3000),
+    ),
     BLOB_READ_WRITE_TOKEN: optionalString,
     SENTRY_DSN: optionalString,
   })
@@ -100,6 +109,10 @@ export const serverEnvSchema = z
         if (!env[key])
           ctx.addIssue({ code: "custom", path: [key], message: "wajib di preview/production" });
       }
+    }
+    // P17: token Fonnte wajib hanya bila kanal WhatsApp diaktifkan.
+    if (env.WHATSAPP_ENABLED && !env.FONNTE_TOKEN) {
+      ctx.addIssue({ code: "custom", path: ["FONNTE_TOKEN"], message: "wajib bila WHATSAPP_ENABLED=true" });
     }
     // Midtrans (P10): selain production wajib sandbox; prefix kunci harus sesuai mode.
     if (env.APP_ENV !== "production" && env.MIDTRANS_IS_PRODUCTION) {

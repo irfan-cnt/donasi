@@ -39,9 +39,9 @@ Catatan: `donation.created` dan `payment.pending` sering terjadi berdekatan; **d
 
 ## Pengiriman
 - **Email:** Nodemailer transport `smtp.gmail.com:465` (secure) dengan `GMAIL_USER` + `GMAIL_APP_PASSWORD`; `from` = `EMAIL_FROM`. Pool koneksi dimatikan di serverless. Batas harian dipantau (counter Redis); bila mendekati limit → alert admin.
-- **WhatsApp:** `POST https://api.fonnte.com/send` header `Authorization: FONNTE_TOKEN`, body `target`, `message`, `countryCode=62`. Respons disimpan (tanpa token).
+- **WhatsApp:** `POST https://api.fonnte.com/send` header `Authorization: FONNTE_TOKEN` (tanpa "Bearer"), body form `target` (E.164 tanpa '+', mis. `6281…`), `message`, `countryCode=0` (lihat "Implementasi P17"). Respons disimpan (tanpa token).
 - **Retry:** QStash `retries: 3`; job idempoten — sebelum kirim cek `notification_logs.dedup_key` berstatus `sent`.
-- **Rate:** Fonnte dibatasi ≤ 1 pesan / 2 s per nomor pengirim (konfigurasi `FONNTE_MIN_DELAY_MS`) menggunakan QStash `delay`/flow control.
+- **Rate:** jeda minimal antar pesan WA `FONNTE_MIN_DELAY_MS` (default 3000 ms) lewat QStash flow control global (lihat "Implementasi P17"). Docs Fonnte tidak menyebut batas rate API; jeda ini untuk mengurangi risiko blokir nomor pengirim.
 
 ## Log
 `notification_logs`: channel, recipient (disimpan penuh untuk kebutuhan kirim ulang; dimasking di UI), template_id, transaction_id, payload (variabel yang dirender — **tanpa** URL bertoken akses penuh; token diganti `***`), status (`queued/sent/failed/skipped`), provider_response, error_message, attempt, sent_at, dedup_key.
@@ -60,3 +60,17 @@ Kegagalan tidak memengaruhi status pembayaran (BR-31). Setelah 3 retry gagal →
 - **Event dipublish**: `payment.pending` (createPayment), `payment.paid` (webhook/expiry/rekonsiliasi + outbox), `payment.failed`/`payment.expired` (webhook & job, hanya bila transaksi ikut terminal), `admin.alert`.
 - **Alert admin via email**: hasil `applyVerifiedStatus` (`amount_mismatch`, `needs_review`, `paid_after_terminal`, `unknown_payment`, `refund_reported`) dari webhook & job (dedup per payment); `provider_auth`, `webhook_unverifiable` (dedup per jam); `provider_404_storm` (per tanggal); rekonsiliasi harian; kuota email. **Belum** dikirim via email (hanya log/audit): `orphan_charge` (createPayment) — tercakup laporan rekonsiliasi harian.
 - Validasi simpan template untuk admin (P23): `validateTemplate()`.
+
+## Implementasi P17 (10 Nov 2026)
+- Kode: `src/lib/whatsapp/fonnte.ts` (server-only; fetch dapat di-inject, timeout 10 s, tanpa retry internal), `notification-service.ts` (`recordWhatsapp` + `handleWhatsappJob`), `notifications/publish.ts` (`publishWhatsappJob`), skrip manual `scripts/whatsapp-test.ts` (`pnpm wa:test --to <nomor> --yes`, ditolak di production).
+- **Dua tahap.** Job event asal (payment.pending/paid/failed) menulis baris WA (`{event}:…:whatsapp`, kontrak drain §6a tetap): `skipped` + alasan bila gate gagal, atau `queued` + publish job `{event:"whatsapp.send", source, transactionId, paymentId}`. Email tidak menunggu WA. Job `whatsapp.send` mengecek ulang gate, merender template WA, mengirim, lalu `sent`/`failed`.
+- **Gate (urutan alasan):** opt-in transaksi (`transactions.whatsapp_opt_in`; tanpa opt-in → tidak ada baris), event usang, `NOTIFICATIONS_ENABLED`, `WHATSAPP_ENABLED`, event punya template WA, `platform_settings notifications.whatsapp_enabled = true`, nomor ada, nomor valid (seluler Indonesia), template WA aktif.
+- **Jeda:** QStash flow control `key=tk-whatsapp-fonnte`, `parallelism=1`, `rate=1`, `period=ceil(FONNTE_MIN_DELAY_MS/1000)` detik (global, satu nomor pengirim). Dedup QStash `wa-{source}-{ref}`.
+- **Error Fonnte → kode** (`error_message = fonnte:{kode}`, `provider_response = {httpStatus, reason, requestid}`): `token invalid` → `invalid_token`; reason berisi "disconnect"/"device" → `device_disconnected`; `target invalid` → `invalid_target`; `insufficient quota` → `quota_exceeded`; `input invalid` dll. → `invalid_input`. Semua ini gagal permanen (200, tanpa retry; admin bisa kirim ulang P23). `invalid_token`/`device_disconnected` → `admin.alert` `kind=whatsapp` (dedup per hari WIB). Timeout/jaringan/HTTP 5xx → `failed` + 500 → QStash retry (3×).
+- **Perbedaan dengan dokumentasi resmi (docs.fonnte.com/api-send-message, dicek 10 Nov 2026) vs catatan playbook:**
+  1. `countryCode`: docs — default `62`, hanya mengganti awalan `0`; `"0"` mematikan penggantian dan target wajib berkode negara. Kita kirim target `62…` (dari E.164) + `countryCode=0` agar Fonnte tidak mengubah nomor (playbook: `countryCode=62`).
+  2. Docs tidak menyebut rate limit API; jeda `FONNTE_MIN_DELAY_MS` adalah kebijakan kita (playbook: "≤ 1 pesan / 2 s").
+  3. Reason "device disconnected" **tidak** tercantum di daftar error docs (hanya token invalid, devices must belong to an account, input invalid, url invalid/unreachable, file…, target invalid, JSON format invalid, insufficient quota). Pemetaan memakai pencocokan substring; perlu dikonfirmasi saat uji manual dengan device terputus.
+  4. Contoh error token di docs memakai `"Status"` (S besar); klien menerima `status`/`Status`.
+  5. `connectOnly` default `true` (device terputus → ditolak, tidak diantre) — dipertahankan; `delay` hanya untuk multi-target, tidak dipakai.
+- **Consent:** BR-26 menyebut "transaksi atau profil"; implementasi memakai centang WA di transaksi (snapshot saat checkout). Profil (`donors.whatsapp_opt_in`) menjadi default centang di checkout donatur login (P18). Keputusan PM bila profil juga harus berlaku tanpa centang.

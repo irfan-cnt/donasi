@@ -5,7 +5,8 @@ import { createJobHandler, type JobDeps } from "@/lib/jobs/job-route";
 import { dedupRef, notifyJobSchema } from "@/lib/notifications/jobs";
 import { siteUrl } from "@/lib/site";
 import { processNotifyJob, type NotifyDeps } from "@/server/services/notification-service";
-import { publishNotification } from "./publish";
+import { createEnvFonnteSender } from "@/lib/whatsapp/fonnte";
+import { publishNotification, publishWhatsappJob } from "./publish";
 
 /** Konfigurasi runtime dari env (dibaca per request; tanpa nilai secret). */
 export function runtimeNotifyConfig(): NotifyDeps["config"] {
@@ -44,6 +45,9 @@ export function createNotifyHandler(
         quota: deps.quota ?? createRedisQuotaCounter(),
         config: deps.config ?? runtimeNotifyConfig(),
         publishAdminAlert: deps.publishAdminAlert ?? publishNotification,
+        whatsapp: deps.whatsapp ?? createEnvFonnteSender(),
+        publishWhatsapp: deps.publishWhatsapp ?? publishWhatsappJob,
+        whatsappSetting: deps.whatsappSetting,
         now: deps.now ? () => new Date(deps.now!()) : undefined,
       });
       return { ...summary };
