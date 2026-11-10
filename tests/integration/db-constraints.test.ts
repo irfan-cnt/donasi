@@ -126,6 +126,6 @@ describe.skipIf(!DATABASE_URL)("db constraints (integration)", () => {
   it("menolak hapus campaign yang punya transaksi (AC-24.1)", () =>
     inRollback(async (c) => {
       const s = await seed(c);
-      await expectSqlError(c, `DELETE FROM campaigns WHERE id = $1`, [s.campaign], "23503");
+      await expectSqlError(c, `DELETE FROM campaigns WHERE id = $1`, [s.campaign], "23001"); // ON DELETE RESTRICT → restrict_violation
     }));
 });
