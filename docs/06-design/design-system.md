@@ -13,13 +13,22 @@ Arah: premium, hangat, terpercaya, Islami secara halus. Light theme utama. Imple
 | `--ink` | #17201C | Teks utama |
 | `--ink-soft` | #4A5550 | Teks paragraf |
 | `--ink-faint` | #78827D | Teks keterangan (≥4.5:1 di atas putih untuk ≥14px) |
-| `--primary` | #0D6E56 | Zamrud — CTA, progres, tautan |
-| `--primary-ink` | #063C2F | Header gelap, nominal penting |
-| `--primary-soft` | #E4F2EC | Latar terpilih |
-| `--gold` | #B7872E | Aksen hangat, CTA hero, “tanpa target” |
+| `--primary` | #086828 | Hijau logo — CTA, progres, tautan, ring fokus (putih di atasnya 6.95:1) |
+| `--primary-hover` | #085828 | Hover tombol primer (8.62:1) |
+| `--primary-ink` | #053F1E | Latar gelap (hero, footer, sidebar admin), nominal penting |
+| `--primary-soft` | #E6F4EA | Latar terpilih (primary di atasnya 6.12:1) |
+| `--primary-bright` | #089838 | Dekoratif saja — **bukan** teks/tombol (3.78:1) |
+| `--gold` | #A35200 | Oranye gelap aman-teks: label aksen di putih (5.58:1) / gold-soft (5.07:1) |
+| `--gold-soft` | #FEF3DC | Latar chip aksen; teks terang di latar hijau tua |
+| `--brand-orange` | #F89808 | Oranye logo — isian CTA hero, bar “tanpa target”; teks di atasnya **gelap** (`text-ink`, 7.53:1), jangan putih (2.21:1) |
+| `--brand-yellow` | #F8B808 | Dekoratif / hover CTA oranye (ink 9.41:1) |
 | `--success/warning/danger/info` | #168048 / #B46E0A / #BE2832 / #1E64B4 | Status |
 
 Aturan: maksimal satu CTA primer per layar; emas hanya untuk aksen/hero, bukan aksi destruktif; status selalu teks + warna (tidak hanya warna).
+
+Grafik admin: seri utama `--primary`, seri kedua `--brand-orange`. Warna yang sama di-hardcode di `src/lib/notifications/email-layout.ts` (EMAIL_BRAND), `src/lib/pdf/documents.tsx`, `THEME_COLOR` (`src/lib/site.ts`, manifest) — ubah bersamaan.
+
+
 
 ## Tipografi
 - **Plus Jakarta Sans** (UI, 400–800) — karya desainer Indonesia, terbaca baik di layar kecil.

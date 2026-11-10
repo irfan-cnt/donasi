@@ -54,7 +54,7 @@ export default function LoginPage({ searchParams }: PageProps<"/masuk">) {
       <div className="relative hidden overflow-hidden bg-primary-ink p-10 text-white md:flex md:flex-col md:justify-between">
         <div className="absolute inset-0 pattern-islamic" aria-hidden />
         <div className="relative">
-          <Logo light />
+          <Logo onDark size="sm" />
         </div>
         <figure className="relative">
           <blockquote className="font-display text-4xl leading-tight font-bold">

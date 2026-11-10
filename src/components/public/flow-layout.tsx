@@ -1,6 +1,7 @@
 import { ArrowLeft, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { Logo } from "@/components/shared/logo";
 import { cn } from "@/lib/utils";
 
 const STEPS = ["Nominal & Data", "Pembayaran", "Selesaikan"] as const;
@@ -29,6 +30,7 @@ export function FlowLayout({
               <ArrowLeft className="size-5" aria-hidden />
             </Link>
           )}
+          <Logo variant="icon" size="xs" />
           <h1 className="font-semibold">{title}</h1>
           <span className="ml-auto flex items-center gap-1 text-xs text-ink-faint">
             <ShieldCheck className="size-4 text-primary" aria-hidden />

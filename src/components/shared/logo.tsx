@@ -1,30 +1,63 @@
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
-export function Logo({ className, light }: { className?: string; light?: boolean }) {
+// Aset dari scripts/brand-assets.ts (sumber: assets/brand-src/). Rasio logo lebar ≈ 5.118:1.
+const WIDE = { src: "/brand/logo-wide-56@2x.png", ratio: 1950 / 381 };
+const ICON = { src: "/brand/logo-icon-128.png" };
+
+const HEIGHT = { xs: 28, sm: 32, md: 40, lg: 56 } as const;
+
+/**
+ * Logo Tebar Kebaikan (aset milik PM). Jangan diwarnai ulang. Di latar gelap (`onDark`) logo
+ * ditaruh di atas chip putih karena wordmark hijau tua tidak terbaca di atas hijau tua.
+ */
+export function Logo({
+  className,
+  variant = "full",
+  size = "md",
+  onDark = false,
+  priority = false,
+}: {
+  className?: string;
+  variant?: "full" | "icon";
+  size?: keyof typeof HEIGHT;
+  onDark?: boolean;
+  /** Hanya untuk header publik (LCP). */
+  priority?: boolean;
+}) {
+  const h = HEIGHT[size];
+  const img =
+    variant === "icon" ? (
+      <Image
+        src={ICON.src}
+        alt="Tebar Kebaikan"
+        width={h}
+        height={h}
+        priority={priority}
+        className="block"
+      />
+    ) : (
+      <Image
+        src={WIDE.src}
+        alt="Tebar Kebaikan"
+        width={Math.round(h * WIDE.ratio)}
+        height={h}
+        priority={priority}
+        className="block h-auto max-w-full"
+      />
+    );
+
   return (
-    <span className={cn("inline-flex items-center gap-2", className)}>
-      <svg viewBox="0 0 32 32" className="size-8" aria-hidden>
-        <rect width="32" height="32" rx="9" fill={light ? "#ffffff" : "rgb(13 110 86)"} />
-        <path
-          d="M16 6c4.5 5.2 7 9 7 12.2A7 7 0 0 1 9 18.2C9 15 11.5 11.2 16 6z"
-          fill={light ? "rgb(13 110 86)" : "#fff"}
-        />
-        <path
-          d="M16 24v-7m0 2.5 3-2.5"
-          stroke={light ? "#fff" : "rgb(183 135 46)"}
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          fill="none"
-        />
-      </svg>
-      <span
-        className={cn(
-          "font-display text-lg leading-none font-bold tracking-tight",
-          light ? "text-white" : "text-ink",
-        )}
-      >
-        Tebar<span className={light ? "text-gold-soft" : "text-primary"}>Kebaikan</span>
-      </span>
+    <span
+      data-testid="brand-logo"
+      className={cn(
+        "inline-flex shrink-0 items-center",
+        onDark && "rounded-xl bg-white shadow-sm",
+        onDark && (variant === "icon" ? "p-1.5" : "px-3 py-2"),
+        className,
+      )}
+    >
+      {img}
     </span>
   );
 }

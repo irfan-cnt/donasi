@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, Plus_Jakarta_Sans } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
-import { SITE_NAME, siteUrl } from "@/lib/site";
+import { DEFAULT_OG_IMAGE, SITE_NAME, THEME_COLOR, siteUrl } from "@/lib/site";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -18,8 +18,11 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
   title: SITE_NAME,
   description: "Platform donasi & crowdfunding Islami.",
-  openGraph: { siteName: SITE_NAME, locale: "id_ID", type: "website" },
+  openGraph: { siteName: SITE_NAME, locale: "id_ID", type: "website", images: [DEFAULT_OG_IMAGE] },
+  twitter: { card: "summary_large_image", images: [DEFAULT_OG_IMAGE.url] },
 };
+
+export const viewport: Viewport = { themeColor: THEME_COLOR };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

@@ -18,13 +18,19 @@
   --tk-ink-soft: 74 85 80; /* #4A5550 */
   --tk-ink-faint: 120 130 125; /* #78827D */
 
-  --tk-primary: 13 110 86; /* #0D6E56 emerald */
-  --tk-primary-hover: 10 90 70;
-  --tk-primary-soft: 228 242 236;
-  --tk-primary-ink: 6 60 47;
+  /* Hijau logo. primary dipakai untuk tombol/teks (putih di atasnya 6.95:1). */
+  --tk-primary: 8 104 40; /* #086828 hijau logo */
+  --tk-primary-hover: 8 88 40; /* #085828 hijau tua logo */
+  --tk-primary-soft: 230 244 234; /* #E6F4EA */
+  --tk-primary-ink: 5 63 30; /* #053F1E latar gelap (footer, sidebar) */
+  --tk-primary-bright: 8 152 56; /* #089838 dekoratif saja — jangan untuk teks (3.78:1) */
 
-  --tk-gold: 183 135 46; /* #B7872E */
-  --tk-gold-soft: 250 243 226;
+  /* Oranye logo. gold = oranye gelap aman-teks (5.58:1 di putih); brand-orange = isian
+     dengan teks gelap (ink 7.53:1), jangan teks putih di atasnya (2.21:1). */
+  --tk-gold: 163 82 0; /* #A35200 */
+  --tk-gold-soft: 254 243 220; /* #FEF3DC */
+  --tk-brand-orange: 248 152 8; /* #F89808 */
+  --tk-brand-yellow: 248 184 8; /* #F8B808 dekoratif */
 
   --tk-success: 22 128 72;
   --tk-success-soft: 226 245 234;
@@ -88,6 +94,9 @@
   --color-primary-ink: rgb(var(--tk-primary-ink));
   --color-gold: rgb(var(--tk-gold));
   --color-gold-soft: rgb(var(--tk-gold-soft));
+  --color-brand-orange: rgb(var(--tk-brand-orange));
+  --color-brand-yellow: rgb(var(--tk-brand-yellow));
+  --color-primary-bright: rgb(var(--tk-primary-bright));
   --color-success: rgb(var(--tk-success));
   --color-success-soft: rgb(var(--tk-success-soft));
   --color-warning: rgb(var(--tk-warning));
@@ -150,7 +159,7 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.10' stroke-width='1'%3E%3Cpath d='M24 4l5.9 14.1L44 24l-14.1 5.9L24 44l-5.9-14.1L4 24l14.1-5.9z'/%3E%3Crect x='14' y='14' width='20' height='20' transform='rotate(45 24 24)'/%3E%3C/g%3E%3C/svg%3E");
 }
 @utility pattern-islamic-dark {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Cg fill='none' stroke='%230D6E56' stroke-opacity='0.08' stroke-width='1'%3E%3Cpath d='M24 4l5.9 14.1L44 24l-14.1 5.9L24 44l-5.9-14.1L4 24l14.1-5.9z'/%3E%3C/g%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Cg fill='none' stroke='%23086828' stroke-opacity='0.08' stroke-width='1'%3E%3Cpath d='M24 4l5.9 14.1L44 24l-14.1 5.9L24 44l-5.9-14.1L4 24l14.1-5.9z'/%3E%3C/g%3E%3C/svg%3E");
 }
 @utility no-scrollbar {
   scrollbar-width: none;

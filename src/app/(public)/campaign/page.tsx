@@ -7,6 +7,7 @@ import { CampaignListSkeleton } from "@/components/public/campaign-list-skeleton
 import { CategoryChips } from "@/components/public/category-chips";
 import { EmptyState } from "@/components/public/empty-state";
 import { buttonVariants } from "@/components/ui/button";
+import { DEFAULT_OG_IMAGE } from "@/lib/site";
 import { parseCategoryParam } from "@/lib/validation/campaign-list";
 import { getCampaignPage, getPublicCategories } from "@/server/queries/public-campaigns";
 
@@ -20,6 +21,7 @@ export const metadata: Metadata = {
     url: "/campaign",
     title: "Semua Program Donasi — Tebar Kebaikan",
     description: "Daftar program donasi yang sedang berjalan dan yang telah selesai.",
+    images: [DEFAULT_OG_IMAGE],
   },
 };
 

@@ -43,7 +43,7 @@ export function PublicHeader() {
     <header className="sticky top-0 z-30 border-b border-border/70 bg-surface/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
         <Link href="/" aria-label="Tebar Kebaikan — Beranda">
-          <Logo />
+          <Logo priority />
         </Link>
         <nav className="hidden items-center gap-1 md:flex" aria-label="Navigasi utama">
           <Link href="/" className={buttonVariants({ variant: "ghost" })}>

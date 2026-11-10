@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CampaignDetailView, donateHref } from "@/components/public/campaign-detail-view";
 import { JsonLd } from "@/components/public/json-ld";
-import { SITE_NAME, siteUrl } from "@/lib/site";
+import { DEFAULT_OG_IMAGE, SITE_NAME, siteUrl } from "@/lib/site";
 import { normalizeSlug } from "@/lib/slug";
 import { getPublicCampaignDetail } from "@/server/queries/public-campaign-detail";
 import { getSitemapCampaigns } from "@/server/queries/public-campaigns";
@@ -36,9 +36,9 @@ export async function generateMetadata({ params }: PageProps<"/campaign/[slug]">
       url,
       title,
       description,
-      images: image ? [{ url: image.url, alt: image.alt }] : undefined,
+      images: image ? [{ url: image.url, alt: image.alt }] : [DEFAULT_OG_IMAGE],
     },
-    twitter: { card: "summary_large_image", title, description, images: image ? [image.url] : undefined },
+    twitter: { card: "summary_large_image", title, description, images: [image ? image.url : DEFAULT_OG_IMAGE.url] },
   };
 }
 

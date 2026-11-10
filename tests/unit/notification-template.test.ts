@@ -80,7 +80,9 @@ describe("layout email (T-29)", () => {
   it("menghasilkan HTML responsif + versi teks dengan alamat lembaga", () => {
     const out = renderEmailLayout({ subject: "Uji <b>", body: "Isi", org });
     expect(out.html).toContain('name="viewport"');
-    expect(out.html).toContain("#0D6E56");
+    expect(out.html).toContain("#086828");
+    expect(out.html).toContain(`<img src="${SITE}/brand/logo-email.png" width="184" height="36" alt="Tebar Kebaikan"`);
+    expect(out.html).not.toContain(">TK</span>");
     expect(out.html).toContain("Jl. Contoh 1 &lt;Jakarta&gt;");
     expect(out.html).toContain("Uji &lt;b&gt;");
     expect(out.text).toContain("Jl. Contoh 1 <Jakarta>");

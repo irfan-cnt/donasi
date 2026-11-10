@@ -24,9 +24,9 @@ const nextConfig: NextConfig = {
   // lokal ikut di-trace ke fungsi serverless yang merender PDF.
   serverExternalPackages: ["@react-pdf/renderer"],
   outputFileTracingIncludes: {
-    "/api/donor/transactions/[code]/pdf": ["./src/lib/pdf/fonts/*.ttf"],
-    "/api/transactions/[code]/receipt": ["./src/lib/pdf/fonts/*.ttf"],
-    "/api/jobs/notify": ["./src/lib/pdf/fonts/*.ttf"],
+    "/api/donor/transactions/[code]/pdf": ["./src/lib/pdf/fonts/*.ttf", "./src/lib/pdf/brand/*.png"],
+    "/api/transactions/[code]/receipt": ["./src/lib/pdf/fonts/*.ttf", "./src/lib/pdf/brand/*.png"],
+    "/api/jobs/notify": ["./src/lib/pdf/fonts/*.ttf", "./src/lib/pdf/brand/*.png"],
   },
   // Gambar campaign/news dari Vercel Blob (OD-12).
   images: { remotePatterns },

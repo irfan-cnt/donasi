@@ -36,7 +36,7 @@ async function Shell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-bg">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-primary-ink px-3 py-5 lg:flex">
         <div className="px-3">
-          <Logo light />
+          <Logo onDark size="sm" />
         </div>
         <span className="mx-3 mt-3 w-fit rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-semibold text-gold-soft">
           Panel Admin
@@ -63,6 +63,7 @@ async function Shell({ children }: { children: React.ReactNode }) {
       <div className="min-w-0 lg:pl-64">
         <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-border bg-surface/95 px-4 backdrop-blur sm:gap-3 lg:px-8">
           <AdminMobileNav groups={groups} />
+          <Logo variant="icon" size="xs" className="shrink-0 lg:hidden" />
           <AdminSearch />
           <div className="ml-auto flex shrink-0 items-center gap-2">
             <span

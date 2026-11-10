@@ -174,7 +174,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/admin">["
                       </div>
                       <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
                         <div
-                          className={c.target ? "h-full bg-primary" : "h-full bg-gold"}
+                          className={c.target ? "h-full bg-primary" : "h-full bg-brand-orange"}
                           style={{ width: `${pct}%` }}
                         />
                       </div>

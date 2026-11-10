@@ -4,16 +4,21 @@ import { escapeHtml } from "./template";
 // memuat CSS eksternal), plus versi teks. Warna dari design tokens (src/app/globals.css).
 
 export const EMAIL_BRAND = {
-  primary: "#0D6E56",
-  primarySoft: "#E4F2EC",
-  primaryInk: "#063C2F",
-  gold: "#B7872E",
+  primary: "#086828",
+  primarySoft: "#E6F4EA",
+  primaryInk: "#053F1E",
+  gold: "#A35200",
+  orange: "#F89808",
   bg: "#F3F1EB",
   border: "#E5E2D9",
   ink: "#17201C",
   inkSoft: "#4A5550",
   inkFaint: "#78827D",
 } as const;
+
+/** Logo email: PNG (bukan WebP) dari public/brand, URL absolut dari APP_URL. Alt = nama org. */
+export const EMAIL_LOGO_PATH = "/brand/logo-email.png";
+export const EMAIL_LOGO = { width: 184, height: 36 } as const;
 
 export interface EmailOrganization {
   name: string;
@@ -76,9 +81,9 @@ export function renderEmailLayout(input: {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${b.bg}">
 <tr><td align="center" style="padding:24px 8px">
 <table role="presentation" class="tk-container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;background:#FFFFFF;border:1px solid ${b.border};border-radius:12px;overflow:hidden">
-<tr><td class="tk-pad" style="background:${b.primary};padding:20px 32px">
-<a href="${escapeHtml(org.siteUrl)}" style="color:#FFFFFF;text-decoration:none;font-size:20px;font-weight:bold;letter-spacing:.3px">
-<span style="display:inline-block;width:28px;height:28px;line-height:28px;text-align:center;border-radius:8px;background:${b.gold};color:#FFFFFF;margin-right:8px;font-size:16px">TK</span>${escapeHtml(org.name)}</a>
+<tr><td class="tk-pad" style="background:#FFFFFF;border-bottom:4px solid ${b.orange};padding:20px 32px">
+<a href="${escapeHtml(org.siteUrl)}" style="color:${b.primary};text-decoration:none;font-size:20px;font-weight:bold;letter-spacing:.3px">
+<img src="${escapeHtml(`${org.siteUrl.replace(/\/+$/, "")}${EMAIL_LOGO_PATH}`)}" width="${EMAIL_LOGO.width}" height="${EMAIL_LOGO.height}" alt="${escapeHtml(org.name)}" style="display:block;border:0;outline:none;width:${EMAIL_LOGO.width}px;height:${EMAIL_LOGO.height}px;color:${b.primary};font-size:20px;font-weight:bold"></a>
 </td></tr>
 <tr><td class="tk-pad" style="padding:32px;font-size:15px;line-height:1.6;color:${b.ink}">
 <h1 style="margin:0 0 20px 0;font-size:20px;line-height:1.35;color:${b.primaryInk}">${escapeHtml(input.subject)}</h1>

@@ -91,7 +91,7 @@ export function AdminMobileNav({ groups }: { groups: AdminNavGroup[] }) {
         data-testid="admin-drawer"
       >
         <SheetTitle className="px-3">
-          <Logo light />
+          <Logo onDark size="sm" />
           <span className="sr-only">Menu admin</span>
         </SheetTitle>
         <div className="mt-2">

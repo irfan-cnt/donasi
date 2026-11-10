@@ -1,6 +1,6 @@
 import "server-only";
 import path from "node:path";
-import { Document, Font, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
+import { Document, Font, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import { terbilangRupiah } from "@/lib/format/terbilang";
 import { formatRupiah } from "@/lib/money";
 import type { ReceiptData } from "@/lib/pdf/receipt-data";
@@ -20,21 +20,37 @@ Font.register({
 // Tanpa pemenggalan kata otomatis (nama & terbilang tidak dipotong dengan tanda hubung).
 Font.registerHyphenationCallback((word) => [word]);
 
-const PRIMARY = "#0f766e";
+// Logo (scripts/brand-assets.ts) dibundel di samping font; dibaca dari disk tanpa fetch.
+const LOGO_PATH = path.join(process.cwd(), "src/lib/pdf/brand/logo-wide.png");
+const LOGO_RATIO = 1950 / 381;
+
+// Warna merek (src/app/globals.css).
+const PRIMARY = "#086828";
+const ORANGE = "#F89808";
 const INK = "#1f2937";
 const SOFT = "#6b7280";
 
 const s = StyleSheet.create({
   page: { fontFamily: FAMILY, fontSize: 10, color: INK, padding: 40, lineHeight: 1.4 },
-  header: { borderBottomWidth: 2, borderBottomColor: PRIMARY, paddingBottom: 10, marginBottom: 16 },
-  org: { fontSize: 16, fontWeight: 700, color: PRIMARY },
-  address: { fontSize: 9, color: SOFT, marginTop: 2 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 2,
+    borderBottomColor: ORANGE,
+    paddingBottom: 10,
+    marginBottom: 16,
+  },
+  logo: { height: 30, width: 30 * LOGO_RATIO },
+  orgBox: { maxWidth: "55%", alignItems: "flex-end" },
+  org: { fontSize: 12, fontWeight: 700, color: PRIMARY, textAlign: "right" },
+  address: { fontSize: 9, color: SOFT, marginTop: 2, textAlign: "right" },
   title: { fontSize: 14, fontWeight: 700, marginBottom: 2 },
   sub: { fontSize: 9, color: SOFT, marginBottom: 14 },
   row: { flexDirection: "row", paddingVertical: 5, borderBottomWidth: 0.5, borderBottomColor: "#e5e7eb" },
   label: { width: "36%", color: SOFT },
   value: { width: "64%", fontWeight: 700 },
-  amountBox: { marginTop: 14, padding: 10, backgroundColor: "#f0fdfa", borderRadius: 4 },
+  amountBox: { marginTop: 14, padding: 10, backgroundColor: "#E6F4EA", borderRadius: 4 },
   amount: { fontSize: 16, fontWeight: 700, color: PRIMARY },
   words: { marginTop: 6, fontSize: 10 },
   sign: { marginTop: 30, alignSelf: "flex-end", width: 200, textAlign: "center" },
@@ -57,8 +73,12 @@ function Row({ label, value }: { label: string; value: string }) {
 function Header({ name, address }: { name: string; address: string }) {
   return (
     <View style={s.header}>
-      <Text style={s.org}>{name}</Text>
-      {address ? <Text style={s.address}>{address}</Text> : null}
+      {/* eslint-disable-next-line jsx-a11y/alt-text -- Image react-pdf tidak punya alt */}
+      <Image src={LOGO_PATH} style={s.logo} />
+      <View style={s.orgBox}>
+        <Text style={s.org}>{name}</Text>
+        {address ? <Text style={s.address}>{address}</Text> : null}
+      </View>
     </View>
   );
 }

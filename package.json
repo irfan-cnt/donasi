@@ -22,6 +22,7 @@
     "admin:create": "tsx scripts/admin-create.ts",
     "admin:reset-password": "tsx scripts/admin-reset-password.ts",
     "qstash:schedules": "tsx scripts/qstash-schedules.ts",
+    "brand:assets": "tsx scripts/brand-assets.ts",
     "wa:test": "tsx --conditions=react-server scripts/whatsapp-test.ts"
   },
   "dependencies": {

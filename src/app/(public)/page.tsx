@@ -12,6 +12,7 @@ import { FundProgress } from "@/components/public/fund-progress";
 import { buttonVariants } from "@/components/ui/button";
 import { formatRupiah } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { DEFAULT_OG_IMAGE } from "@/lib/site";
 import { parseCategoryParam } from "@/lib/validation/campaign-list";
 import {
   getCampaignPage,
@@ -32,6 +33,7 @@ export const metadata: Metadata = {
     title: "Tebar Kebaikan — Donasi & Sedekah Online yang Amanah",
     description:
       "Donasi dalam hitungan detik tanpa perlu daftar. Setiap rupiah tercatat dan penyalurannya dilaporkan.",
+    images: [DEFAULT_OG_IMAGE],
   },
 };
 
@@ -59,7 +61,7 @@ async function Hero() {
               href={featured ? `/campaign/${featured.slug}` : "/campaign"}
               className={cn(
                 buttonVariants({ size: "lg" }),
-                "h-11 bg-gold px-5 text-white hover:bg-gold/90",
+                "h-11 bg-brand-orange px-5 text-ink hover:bg-brand-yellow",
               )}
             >
               Donasi Sekarang

@@ -10,7 +10,7 @@ export function Footer() {
       <div className="pattern-islamic">
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 md:grid-cols-4">
           <div className="md:col-span-3">
-            <Logo light />
+            <Logo onDark size="sm" />
             <p className="mt-3 max-w-sm text-sm leading-relaxed">
               Platform donasi yang amanah dan transparan. Setiap rupiah tercatat, setiap
               penyaluran dilaporkan.
