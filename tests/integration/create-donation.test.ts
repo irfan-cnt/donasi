@@ -27,7 +27,9 @@ describe.skipIf(!ENABLED)("createDonation (integration)", () => {
     emails.push(e);
     return e;
   };
-  const ctx = () => ({ sessionDonor: null, ip: "203.0.113.10", userAgent: "vitest", log });
+  // IP acak per run (TEST-NET-3) supaya rate limit checkout di Upstash tidak habis antar-run.
+  const testIp = `203.0.113.${1 + Math.floor(Math.random() * 254)}`;
+  const ctx = () => ({ sessionDonor: null, ip: testIp, userAgent: "vitest", log });
 
   beforeAll(async () => {
     const own = await sql`

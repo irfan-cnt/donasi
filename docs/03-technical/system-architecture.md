@@ -94,7 +94,13 @@ src/app/
   (auth)/masuk/page.tsx                     Donor Login
   (donor)/akun/...                          Dashboard, transaksi, profil
   admin/masuk/                              Admin login
-  admin/(panel)/...                         Admin pages
+  admin/(panel)/                            Dashboard (P20): KPI, grafik harian, performa campaign, transaksi terbaru
+  admin/(panel)/{campaign,berita}/          P21 (campaigns.read / news.write)
+  admin/(panel)/{transaksi,donatur,metode-pembayaran,log-pembayaran,audit}/   P22
+  admin/(panel)/{template-notifikasi,log-notifikasi}/                       P23
+                                            Menu admin (src/lib/admin-auth/admin-nav.ts) difilter permission BR-40.
+                                            Rute yang belum dibangun = halaman "Segera hadir" yang dijaga
+                                            requireAdmin(permission menu yang sama) — tidak ada tautan 404.
   api/auth/[...nextauth]/  api/webhooks/*  api/jobs/*  api/donor/*  api/admin/*
 ```
 

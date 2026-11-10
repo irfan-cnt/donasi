@@ -85,7 +85,7 @@ test.describe("auth admin (P05)", () => {
     const admin = await newAdmin({ role: "admin" });
     await setCookie(page, baseURL, ADMIN_COOKIE, await seedAdminSession(admin.id, 5));
     await page.goto("/admin");
-    await expect(page.getByRole("heading", { name: /Assalamu'alaikum/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
   });
 
   test("role editor ditolak akses transaksi → 403 (AC-22.2)", async ({ page, baseURL }) => {
@@ -157,7 +157,7 @@ test.describe("auth admin (P05)", () => {
     const secret = (await page.locator("details code").textContent())!.trim();
     await page.getByLabel("Kode dari aplikasi (6 digit)").fill(authenticator.generate(secret));
     await page.getByRole("button", { name: "Aktifkan autentikator" }).click();
-    await expect(page.getByRole("heading", { name: /Assalamu'alaikum/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
 
     // Keluar lalu masuk lagi: kini TOTP wajib.
     await page.getByRole("button", { name: "Keluar" }).click();
@@ -166,7 +166,7 @@ test.describe("auth admin (P05)", () => {
     await expect(page.getByText("Email, password, atau kode autentikator salah.")).toBeVisible();
     await expect(page.getByLabel("Email")).toHaveValue("");
     await login(page, owner.email, newPassword, authenticator.generate(secret));
-    await expect(page.getByRole("heading", { name: /Assalamu'alaikum/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
 
     expect(await auditActions(owner.id)).toEqual(
       expect.arrayContaining([

@@ -20,6 +20,7 @@
     "test:integration": "vitest run tests/integration",
     "db:seed:sample": "tsx scripts/seed.ts --sample",
     "admin:create": "tsx scripts/admin-create.ts",
+    "admin:reset-password": "tsx scripts/admin-reset-password.ts",
     "qstash:schedules": "tsx scripts/qstash-schedules.ts",
     "wa:test": "tsx --conditions=react-server scripts/whatsapp-test.ts"
   },
@@ -46,6 +47,7 @@
     "qrcode": "1.5.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "recharts": "^3.10.1",
     "sanitize-html": "^2.18.1",
     "server-only": "^0.0.1",
     "shadcn": "^4.23.0",

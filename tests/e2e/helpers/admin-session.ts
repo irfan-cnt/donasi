@@ -28,13 +28,17 @@ export interface SeededAdmin {
 export async function seedAdmin(opts: {
   role: "owner" | "admin" | "finance" | "editor";
   mustChangePassword?: boolean;
+  /** Tandai TOTP aktif (tanpa secret) agar owner tidak diarahkan ke setup TOTP — hanya untuk sesi seed. */
+  totpEnabled?: boolean;
+  name?: string;
 }): Promise<SeededAdmin> {
   const db = sql();
   const id = randomUUID();
   const email = `e2e-admin+${id}@example.test`;
   const passwordHash = await hashPassword(ADMIN_PASSWORD);
-  await db`insert into admin_users (id, email, name, password_hash, must_change_password)
-    values (${id}, ${email}, ${"Admin E2E"}, ${passwordHash}, ${opts.mustChangePassword ?? false})`;
+  await db`insert into admin_users (id, email, name, password_hash, must_change_password, totp_enabled)
+    values (${id}, ${email}, ${opts.name ?? "Admin E2E"}, ${passwordHash}, ${opts.mustChangePassword ?? false},
+      ${opts.totpEnabled ?? false})`;
   const roles = await db`select id from roles where code = ${opts.role}`;
   if (!roles[0]) throw new Error(`Role ${opts.role} belum di-seed (pnpm db:seed)`);
   await db`insert into admin_user_roles (admin_user_id, role_id) values (${id}, ${roles[0].id})`;
