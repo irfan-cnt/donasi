@@ -101,7 +101,7 @@ src/app/
 
 | Halaman | Strategi |
 |---|---|
-| Home, Campaign Detail, News | RSC + ISR (`revalidate` 60 s) + `revalidateTag` saat admin publish / pembayaran paid (total) |
+| Home, Campaign Detail, News | RSC + ISR (`revalidate` 60 s) + `revalidateTag` saat admin publish / pembayaran paid (total). Implementasi Next 16 `cacheComponents`: query di `src/server/queries/*` memakai `"use cache"` + `cacheLife({ revalidate: 60 })` + `cacheTag('campaigns', 'campaign:{slug}')`; bagian yang membaca `searchParams` (`?kategori=`) di dalam `<Suspense>` (PPR). Statistik (5 menit) & kategori (1 jam) juga di-cache Redis via `cachedJson`; tanpa Upstash di `APP_ENV=development` Redis dilewati, di preview/production env Upstash wajib; error Redis runtime → fail-open + log. |
 | Checkout, Select Payment, Instruction, Pending, Success | Dinamis (`no-store`) |
 | Donor & Admin | Dinamis, server-only auth |
 
