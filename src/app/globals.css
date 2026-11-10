@@ -1,0 +1,172 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * Tebar Kebaikan — design tokens (light theme), diporting dari
+ * design-mockups/src/styles/globals.css & tailwind.config.js.
+ * Token merek disimpan sebagai triplet RGB (--tk-*) lalu dipetakan ke
+ * utilitas Tailwind (bg-bg, text-ink, bg-primary-soft, text-gold, …) dan
+ * ke variabel semantik shadcn/ui (--primary, --muted, --border, …).
+ */
+:root {
+  --tk-bg: 250 249 245; /* #FAF9F5 krem hangat */
+  --tk-surface: 255 255 255;
+  --tk-muted: 243 241 235; /* #F3F1EB */
+  --tk-border: 229 226 217; /* #E5E2D9 */
+  --tk-ink: 23 32 28; /* #17201C */
+  --tk-ink-soft: 74 85 80; /* #4A5550 */
+  --tk-ink-faint: 120 130 125; /* #78827D */
+
+  --tk-primary: 13 110 86; /* #0D6E56 emerald */
+  --tk-primary-hover: 10 90 70;
+  --tk-primary-soft: 228 242 236;
+  --tk-primary-ink: 6 60 47;
+
+  --tk-gold: 183 135 46; /* #B7872E */
+  --tk-gold-soft: 250 243 226;
+
+  --tk-success: 22 128 72;
+  --tk-success-soft: 226 245 234;
+  --tk-warning: 180 110 10;
+  --tk-warning-soft: 254 243 222;
+  --tk-danger: 190 40 50;
+  --tk-danger-soft: 253 232 233;
+  --tk-info: 30 100 180;
+  --tk-info-soft: 230 240 252;
+
+  /* Variabel semantik shadcn/ui */
+  --background: rgb(var(--tk-bg));
+  --foreground: rgb(var(--tk-ink));
+  --card: rgb(var(--tk-surface));
+  --card-foreground: rgb(var(--tk-ink));
+  --popover: rgb(var(--tk-surface));
+  --popover-foreground: rgb(var(--tk-ink));
+  --primary: rgb(var(--tk-primary));
+  --primary-foreground: rgb(255 255 255);
+  --secondary: rgb(var(--tk-primary-soft));
+  --secondary-foreground: rgb(var(--tk-primary-ink));
+  --muted: rgb(var(--tk-muted));
+  --muted-foreground: rgb(var(--tk-ink-faint));
+  --accent: rgb(var(--tk-primary-soft));
+  --accent-foreground: rgb(var(--tk-primary-ink));
+  --destructive: rgb(var(--tk-danger));
+  --border: rgb(var(--tk-border));
+  --input: rgb(var(--tk-border));
+  --ring: rgb(var(--tk-primary));
+  --radius: 0.75rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Token merek (nama sama dengan mockup) */
+  --color-bg: rgb(var(--tk-bg));
+  --color-surface: rgb(var(--tk-surface));
+  --color-ink: rgb(var(--tk-ink));
+  --color-ink-soft: rgb(var(--tk-ink-soft));
+  --color-ink-faint: rgb(var(--tk-ink-faint));
+  --color-primary-hover: rgb(var(--tk-primary-hover));
+  --color-primary-soft: rgb(var(--tk-primary-soft));
+  --color-primary-ink: rgb(var(--tk-primary-ink));
+  --color-gold: rgb(var(--tk-gold));
+  --color-gold-soft: rgb(var(--tk-gold-soft));
+  --color-success: rgb(var(--tk-success));
+  --color-success-soft: rgb(var(--tk-success-soft));
+  --color-warning: rgb(var(--tk-warning));
+  --color-warning-soft: rgb(var(--tk-warning-soft));
+  --color-danger: rgb(var(--tk-danger));
+  --color-danger-soft: rgb(var(--tk-danger-soft));
+  --color-info: rgb(var(--tk-info));
+  --color-info-soft: rgb(var(--tk-info-soft));
+
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-fraunces), Georgia, serif;
+  --font-display: var(--font-fraunces), Georgia, serif;
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
+
+  --shadow-card: 0 1px 2px rgb(16 24 20 / 0.04), 0 2px 8px rgb(16 24 20 / 0.05);
+  --shadow-lift: 0 8px 24px rgb(16 24 20 / 0.1);
+  --shadow-cta: 0 -6px 20px rgb(16 24 20 / 0.08);
+
+  --animate-shimmer: shimmer 1.5s infinite;
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+}
+
+@utility container {
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+    @apply font-sans;
+  }
+  body {
+    @apply bg-bg text-ink antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--tk-primary));
+    outline-offset: 2px;
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Motif geometri halus (bintang 8 sudut) — dipakai sangat tipis */
+@utility pattern-islamic {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.10' stroke-width='1'%3E%3Cpath d='M24 4l5.9 14.1L44 24l-14.1 5.9L24 44l-5.9-14.1L4 24l14.1-5.9z'/%3E%3Crect x='14' y='14' width='20' height='20' transform='rotate(45 24 24)'/%3E%3C/g%3E%3C/svg%3E");
+}
+@utility pattern-islamic-dark {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Cg fill='none' stroke='%230D6E56' stroke-opacity='0.08' stroke-width='1'%3E%3Cpath d='M24 4l5.9 14.1L44 24l-14.1 5.9L24 44l-5.9-14.1L4 24l14.1-5.9z'/%3E%3C/g%3E%3C/svg%3E");
+}
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer components {
+  .prose-tk p {
+    @apply mb-3 leading-relaxed text-ink-soft;
+  }
+  .prose-tk h3 {
+    @apply mt-5 mb-2 font-semibold text-ink;
+  }
+  .prose-tk ul {
+    @apply mb-3 list-disc space-y-1 pl-5 text-ink-soft;
+  }
+}

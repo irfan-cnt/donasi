@@ -5,3 +5,18 @@
 node_modules/
 dist/
 dist-single/
+
+# Next.js app (P01)
+!.env.example
+/.next/
+/out/
+/build
+/coverage
+*.tsbuildinfo
+next-env.d.ts
+*.pem
+.pnpm-debug.log*
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

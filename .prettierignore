@@ -1,0 +1,10 @@
+design-mockups/
+docs/
+drizzle/
+pnpm-lock.yaml
+.next/
+src/components/ui/
+*.md
+.claude/
+.omc/
+.vercel/
