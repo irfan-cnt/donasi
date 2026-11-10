@@ -12,6 +12,10 @@ const valid = {
   AUTH_SECRET: "x".repeat(32),
   APP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
   APP_URL: "https://example.org",
+  GMAIL_USER: "notif@example.org",
+  GMAIL_APP_PASSWORD: "abcdabcdabcdabcd",
+  EMAIL_FROM: "Tebar Kebaikan <notif@example.org>",
+  EMAIL_ADMIN_ALERT: "admin@example.org",
 };
 
 describe("env schema", () => {
@@ -122,5 +126,30 @@ describe("env schema — APP_ENCRYPTION_KEY (P05)", () => {
       expect(String(e)).toMatch(/APP_ENCRYPTION_KEY: harus base64 dari 32 byte/);
       expect(String(e)).not.toContain(bad);
     }
+  });
+});
+
+describe("env schema — email Gmail (P16)", () => {
+  const noEmail = { ...valid, GMAIL_USER: "", GMAIL_APP_PASSWORD: "", EMAIL_FROM: "", EMAIL_ADMIN_ALERT: "" };
+
+  it("boleh kosong di development, wajib di preview/production tanpa membocorkan nilai", () => {
+    expect(parseServerEnv(noEmail).GMAIL_USER).toBeUndefined();
+    for (const key of ["GMAIL_USER", "GMAIL_APP_PASSWORD", "EMAIL_FROM", "EMAIL_ADMIN_ALERT"]) {
+      expect(() => parseServerEnv({ ...valid, APP_ENV: "preview", [key]: "" })).toThrow(
+        new RegExp(`${key}: wajib`),
+      );
+    }
+    try {
+      parseServerEnv({ ...valid, APP_ENV: "preview", GMAIL_USER: "" });
+    } catch (e) {
+      expect(String(e)).not.toContain(valid.GMAIL_APP_PASSWORD);
+    }
+  });
+
+  it("EMAIL_DAILY_LIMIT default 500, kosong → default, harus positif", () => {
+    expect(parseServerEnv(valid).EMAIL_DAILY_LIMIT).toBe(500);
+    expect(parseServerEnv({ ...valid, EMAIL_DAILY_LIMIT: "" }).EMAIL_DAILY_LIMIT).toBe(500);
+    expect(parseServerEnv({ ...valid, EMAIL_DAILY_LIMIT: "2000" }).EMAIL_DAILY_LIMIT).toBe(2000);
+    expect(() => parseServerEnv({ ...valid, EMAIL_DAILY_LIMIT: "0" })).toThrow(/EMAIL_DAILY_LIMIT/);
   });
 });

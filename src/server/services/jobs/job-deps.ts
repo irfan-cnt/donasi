@@ -10,6 +10,8 @@ import {
   type ApplyVerifiedStatusResult,
 } from "@/lib/payments/apply-verified-status";
 import type { PaymentProvider, ProviderCode } from "@/lib/payments/types";
+import type { NotifyJob } from "@/lib/notifications/jobs";
+import { followUpJobs } from "@/lib/payments/notification-jobs";
 import type { PaidJob } from "@/lib/payments/webhook/midtrans-webhook";
 
 // Dependensi bersama job P14. Route memakai implementasi nyata (registry, QStash, revalidateTag);
@@ -31,6 +33,8 @@ export interface JobServiceDeps {
   revalidateCampaign: (campaignId: string, log: Logger) => Promise<void>;
   /** Alert admin (email EMAIL_ADMIN_ALERT dikirim handler notify P16). */
   publishAdminAlert: (job: AdminAlertJob, log: Logger) => Promise<void>;
+  /** P16: notifikasi lain (payment.failed/expired, admin.alert anomali) setelah commit. */
+  publishNotification?: (job: NotifyJob, log: Logger) => Promise<void>;
   /** revalidateTag (campaign scheduler). */
   revalidateTags: (tags: string[]) => void;
   now?: () => number;
@@ -94,6 +98,13 @@ export async function applyProviderStatus(
       await deps
         .revalidateCampaign(applied.campaignId, deps.log)
         .catch((e: unknown) => deps.log.warn("revalidate gagal", { error: String(e) }));
+    }
+  }
+  if (deps.publishNotification) {
+    for (const job of followUpJobs(applied, input.paymentId)) {
+      await deps
+        .publishNotification(job, deps.log)
+        .catch((e: unknown) => deps.log.error(`publish ${job.event} gagal`, { error: String(e) }));
     }
   }
   return applied;

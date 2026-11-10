@@ -9,6 +9,13 @@ const FIXED = "contoh-paket-sembako-dhuafa";
 const PAUSED = "contoh-dana-darurat-kemanusiaan";
 const DRAFT = "contoh-ambulans-gratis-dhuafa";
 
+// Rate limit checkout per IP (10/jam, Upstash nyata) dipakai bersama antar-run: tiap test memakai
+// IP uji unik (198.18.0.0/15, RFC 2544) lewat x-forwarded-for. Limiter produksi tidak diubah.
+test.beforeEach(async ({ page }) => {
+  const octet = () => Math.floor(Math.random() * 254) + 1;
+  await page.setExtraHTTPHeaders({ "x-forwarded-for": `198.${18 + (octet() % 2)}.${octet()}.${octet()}` });
+});
+
 const emails: string[] = [];
 const newEmail = () => {
   const e = `e2e+checkout-${randomUUID()}@example.test`;

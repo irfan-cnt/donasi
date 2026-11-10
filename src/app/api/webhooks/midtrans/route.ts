@@ -11,6 +11,7 @@ import {
   publishPaidNotification,
   revalidateCampaignThrottled,
 } from "@/lib/payments/webhook/side-effects";
+import { publishNotification } from "@/server/services/notifications/publish";
 
 // HTTP Notification Midtrans (P13, F-17). Kode respons: payment-architecture.md §5b.
 // Jangan pernah me-log body/header (signature_key, PII).
@@ -74,6 +75,7 @@ export async function POST(request: NextRequest) {
         provider: getProvider("midtrans"),
         publishPaid: publishPaidNotification,
         revalidateCampaign: revalidateCampaignThrottled,
+        publishNotification,
         onRejectedSignature: async () => {
           try {
             const rl = await rateLimit(

@@ -10,6 +10,7 @@ import {
 } from "@/lib/payments/webhook/side-effects";
 import { publishJob } from "@/lib/qstash";
 import { siteUrl } from "@/lib/site";
+import { publishNotification } from "@/server/services/notifications/publish";
 import type { AdminAlertJob, JobServiceDeps } from "./job-deps";
 
 /** QStash tersedia? Tanpa token hanya boleh di development (log & lewati). */
@@ -86,6 +87,7 @@ export function runtimeJobDeps(log: Logger): JobServiceDeps {
     publishPaid: publishPaidNotification,
     revalidateCampaign: revalidateCampaignThrottled,
     publishAdminAlert,
+    publishNotification,
     revalidateTags: (tags) => {
       for (const tag of tags) revalidateTag(tag, "max");
     },

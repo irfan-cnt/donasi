@@ -35,11 +35,24 @@ export async function cleanupCheckout(emails: string[]): Promise<void> {
   const pending = await db`select p.id from payments p join transactions t on t.id = p.transaction_id
     where t.donor_email_snapshot = any(${emails}::citext[]) and p.status = 'pending'`;
   for (const row of pending) await expireSandboxCharge(row.id as string);
-  await db`delete from payment_events where payment_id in (select p.id from payments p
-    join transactions t on t.id = p.transaction_id where t.donor_email_snapshot = any(${emails}::citext[]))`;
-  await db`delete from payments where transaction_id in (select id from transactions
-    where donor_email_snapshot = any(${emails}::citext[]))`;
-  await db`delete from transactions where donor_email_snapshot = any(${emails}::citext[])`;
+  // Satu statement (CTE) + retry: polling status / job yang masih berjalan bisa menyisipkan
+  // payment_events baru di antara dua DELETE terpisah (FK payment_events → payments).
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await db`with trx as (select id from transactions where donor_email_snapshot = any(${emails}::citext[])),
+        pay as (select id from payments where transaction_id in (select id from trx)),
+        ev as (delete from payment_events where payment_id in (select id from pay)),
+        nl as (delete from notification_logs where transaction_id in (select id from trx))
+        delete from payments where id in (select id from pay)`;
+      await db`delete from notification_logs where transaction_id in (select id from transactions
+        where donor_email_snapshot = any(${emails}::citext[]))`;
+      await db`delete from transactions where donor_email_snapshot = any(${emails}::citext[])`;
+      break;
+    } catch (error) {
+      if (attempt >= 3) throw error;
+      await new Promise((r) => setTimeout(r, 500 * attempt));
+    }
+  }
   await db`delete from donors where email = any(${emails}::citext[]) and user_id is null`;
 }
 

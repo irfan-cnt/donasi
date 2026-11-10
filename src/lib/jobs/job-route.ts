@@ -36,6 +36,11 @@ export interface JobOptions {
   lockTtlMs: number;
   /** Anggaran waktu kerja (ms). */
   budgetMs: number;
+  /**
+   * Nama lock dari body terverifikasi (default `job:{name}`). Dipakai job per-pesan (notify, P16)
+   * agar pesan berbeda tidak saling melewati, sementara pesan kembar tetap diserialkan.
+   */
+  lockName?: (body: unknown) => string;
 }
 
 export interface JobDeps {
@@ -128,9 +133,10 @@ export function createJobHandler(
       }
     }
 
+    const lockName = options.lockName?.(body) ?? `job:${name}`;
     let owner: string | null;
     try {
-      owner = await lock.acquire(`job:${name}`, options.lockTtlMs);
+      owner = await lock.acquire(lockName, options.lockTtlMs);
     } catch (error) {
       log.error("job: lock tidak tersedia", { error: safeError(error) });
       return json(503, { ok: false, result: "lock_unavailable" });
@@ -151,7 +157,7 @@ export function createJobHandler(
       });
       return json(500, { ok: false, result: "error" });
     } finally {
-      await lock.release(`job:${name}`, owner).catch((error: unknown) => {
+      await lock.release(lockName, owner).catch((error: unknown) => {
         log.warn("job: gagal melepas lock", { error: safeError(error) });
       });
     }

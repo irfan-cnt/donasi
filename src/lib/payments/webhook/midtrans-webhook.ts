@@ -7,7 +7,9 @@ import { newId } from "@/lib/id";
 import { auditLogs } from "@/lib/db/schema";
 import type { Logger } from "@/lib/logger";
 import { applyVerifiedStatus, type ApplyVerifiedStatusResult } from "../apply-verified-status";
+import type { NotifyJob } from "@/lib/notifications/jobs";
 import { MidtransError } from "../midtrans/errors";
+import { followUpJobs, hourBucket } from "../notification-jobs";
 import { redactPayload } from "../midtrans/redact";
 import type { PaymentProvider, VerifiedWebhook } from "../types";
 
@@ -51,7 +53,21 @@ export interface MidtransWebhookDeps {
    * → 429. Harus fail-open (false) bila Redis error.
    */
   onRejectedSignature: () => Promise<boolean>;
+  /**
+   * P16: publish notifikasi lain (payment.failed/expired, admin.alert) setelah commit.
+   * Opsional; error ditangkap & dilog — tidak pernah mengubah kode respons/status.
+   */
+  publishNotification?: (job: NotifyJob, log: Logger) => Promise<void>;
   log: Logger;
+}
+
+async function publishAll(deps: MidtransWebhookDeps, jobs: NotifyJob[], log: Logger) {
+  if (!deps.publishNotification) return;
+  for (const job of jobs) {
+    await deps
+      .publishNotification(job, log)
+      .catch((e: unknown) => log.error(`publish ${job.event} gagal`, { error: errorCode(e) }));
+  }
 }
 
 const res = (status: number, result: string, ok = status < 300): WebhookResponse => ({
@@ -220,6 +236,11 @@ export async function handleMidtransWebhook(
         if (mcode === "unauthorized") {
           // Get Status 401/403: server key salah/dicabut — semua webhook akan gagal sampai diperbaiki.
           ilog.error("payment.alert", { kind: "provider_auth", error: code });
+          await publishAll(
+            deps,
+            [{ event: "admin.alert", kind: "payment", alert: "provider_auth", ref: hourBucket() }],
+            ilog,
+          );
         }
         await markEvent(eventRowId, { result: "error", error: code });
         ilog.error("webhook midtrans: verifikasi gagal sementara; minta retry", { error: code });
@@ -230,6 +251,11 @@ export async function handleMidtransWebhook(
       await markEvent(eventRowId, { verification: "rejected", result: "error", error: code });
       await auditWebhookIssue("payment.webhook_unverifiable", eventRowId, { orderId, error: code });
       ilog.error("payment.alert", { kind: "webhook_unverifiable", error: code });
+      await publishAll(
+        deps,
+        [{ event: "admin.alert", kind: "payment", alert: "webhook_unverifiable", ref: hourBucket() }],
+        ilog,
+      );
       return res(200, "unverifiable");
     } catch (e2) {
       ilog.error("webhook midtrans: gagal mencatat hasil verifikasi", { error: errorCode(e2) });
@@ -323,5 +349,6 @@ export async function handleMidtransWebhook(
         .catch((e: unknown) => ilog.warn("revalidate campaign gagal", { error: errorCode(e) }));
     }
   }
+  await publishAll(deps, followUpJobs(result, verified.orderId), ilog);
   return res(200, result.outcome);
 }

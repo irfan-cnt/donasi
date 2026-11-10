@@ -20,6 +20,11 @@ const DEPLOYED_REQUIRED = [
   "APP_ENCRYPTION_KEY",
   // P14: URL kanonik untuk verifikasi signature QStash & tujuan publish job.
   "APP_URL",
+  // P16: email notifikasi Gmail SMTP. Development boleh kosong (tes memakai transport palsu).
+  "GMAIL_USER",
+  "GMAIL_APP_PASSWORD",
+  "EMAIL_FROM",
+  "EMAIL_ADMIN_ALERT",
 ] as const;
 
 /** Ambil env opsional yang dibutuhkan fitur tertentu; error berisi NAMA variabel saja. */
@@ -77,6 +82,11 @@ export const serverEnvSchema = z
     GMAIL_APP_PASSWORD: optionalString,
     EMAIL_FROM: optionalString,
     EMAIL_ADMIN_ALERT: optionalString,
+    // P16: kuota harian Gmail (akun biasa ±500/hari, Workspace ±2000/hari); alert admin > 80%.
+    EMAIL_DAILY_LIMIT: z.preprocess(
+      (v) => (v === "" ? undefined : v),
+      z.coerce.number().int().positive().default(500),
+    ),
     NOTIFICATIONS_ENABLED: booleanFlag,
     WHATSAPP_ENABLED: booleanFlag,
     FONNTE_TOKEN: optionalString,

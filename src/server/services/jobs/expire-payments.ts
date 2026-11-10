@@ -161,6 +161,18 @@ async function settleNotFound(
         batchSize: batchLen,
         totalNotFound: cumulative,
       });
+      await deps
+        .publishNotification?.(
+          {
+            event: "admin.alert",
+            kind: "payment",
+            alert: "provider_404_storm",
+            ref: new Date().toISOString().slice(0, 10),
+            counts: { batchNotFound: list.length, batchSize: batchLen, totalNotFound: cumulative },
+          },
+          deps.log,
+        )
+        .catch((e: unknown) => deps.log.error("publish alert 404 gagal", { error: String(e) }));
     }
     s.notFoundStorm = true;
     s.notFoundHeld += list.length;
