@@ -131,10 +131,12 @@ describe("landing page — state kosong (DB tanpa program/donasi)", () => {
   it("LP-AC-06/LP-AC-01: tanpa program unggulan → kartu tidak dirender, CTA primer ke /campaign, satu H1", () => {
     const html = renderToStaticMarkup(createElement(HeroView, { featured: null }));
     expect(html.match(/<h1/g)).toHaveLength(1);
-    expect(html).toContain("Kebaikan kecil, dampak yang nyata.");
+    expect(html).toContain("Kebaikan kecil <em");
+    expect(html).toContain("berdampak Besar</em> untuk sesama");
     expect(html.match(/<a[^>]*data-track-cta="primary"[^>]*>/)?.[0]).toContain('href="/campaign"');
     expect(html).not.toContain("Program Pilihan");
-    expect(html).toContain("Tanpa wajib daftar · Kuitansi otomatis");
+    expect(html).toContain("Tanpa wajib daftar akun");
+    expect(html).toContain("Kuitansi otomatis via email");
   });
 });
 

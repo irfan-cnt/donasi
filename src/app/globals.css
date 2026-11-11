@@ -120,6 +120,24 @@
   --shadow-lift: 0 8px 24px rgb(16 24 20 / 0.1);
   --shadow-cta: 0 -6px 20px rgb(16 24 20 / 0.08);
 
+  --animate-lp-bob: lp-bob 7s ease-in-out infinite;
+  @keyframes lp-bob {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+  --animate-lp-rise: lp-rise 0.3s ease both;
+  @keyframes lp-rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+  }
+
   --animate-shimmer: shimmer 1.5s infinite;
   @keyframes shimmer {
     100% {
@@ -178,4 +196,59 @@
   .prose-tk ul {
     @apply mb-3 list-disc space-y-1 pl-5 text-ink-soft;
   }
+}
+
+/*
+ * Beranda (desain "Beranda — TebarKebaikan", Nov 2026). Palet desain dibatasi ke elemen
+ * berkelas .lp (beranda, header & footer publik) agar halaman lain dan panel admin tidak
+ * berubah. Nama token sama dengan :root, jadi utilitas (bg-primary, text-ink-faint, …)
+ * otomatis memakai nilai desain di dalam .lp.
+ */
+.lp {
+  --tk-bg: 250 250 247; /* #FAFAF7 */
+  --tk-muted: 237 241 236; /* #EDF1EC */
+  --tk-border: 232 236 231; /* #E8ECE7 */
+  --tk-ink: 32 40 32; /* #202820 */
+  --tk-ink-soft: 62 71 63; /* #3E473F */
+  --tk-ink-faint: 94 102 95; /* #5E665F */
+  --tk-primary: 7 92 50; /* #075C32 */
+  --tk-primary-hover: 6 68 38; /* #064426 */
+  --tk-primary-soft: 234 243 237; /* #EAF3ED */
+  --tk-primary-ink: 6 68 38; /* #064426 */
+  --tk-gold: 168 90 0; /* #A85A00 */
+  --tk-gold-soft: 254 243 220; /* #FEF3DC */
+  --tk-brand-orange: 245 158 11; /* #F59E0B */
+  --tk-brand-yellow: 251 191 36; /* #FBBF24 */
+  --tk-danger: 180 35 24; /* #B42318 */
+
+  --background: rgb(var(--tk-bg));
+  --foreground: rgb(var(--tk-ink));
+  --primary: rgb(var(--tk-primary));
+  --secondary: rgb(var(--tk-primary-soft));
+  --secondary-foreground: rgb(var(--tk-primary-ink));
+  --muted: rgb(var(--tk-muted));
+  --muted-foreground: rgb(var(--tk-ink-faint));
+  --accent: rgb(var(--tk-primary-soft));
+  --accent-foreground: rgb(var(--tk-primary-ink));
+  --border: rgb(var(--tk-border));
+  --input: rgb(var(--tk-border));
+  --ring: rgb(var(--tk-primary));
+  color: rgb(var(--tk-ink));
+}
+/* Di permukaan hijau tua, cincin fokus hijau tidak terlihat → oranye desain. */
+.lp-dark :focus-visible {
+  outline: 3px solid #f59e0b;
+  outline-offset: 2px;
+}
+
+/* Motif geometri desain (dua persegi bersilang + titik sudut), ubin 72 px. */
+@utility lp-geo {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72'%3E%3Cg fill='none' stroke='%23fff' stroke-opacity='.09' stroke-width='1.2'%3E%3Crect x='22' y='22' width='28' height='28'/%3E%3Crect x='22' y='22' width='28' height='28' transform='rotate(45 36 36)'/%3E%3C/g%3E%3Cg fill='%23fff' fill-opacity='.12'%3E%3Ccircle r='2'/%3E%3Ccircle cx='72' r='2'/%3E%3Ccircle cy='72' r='2'/%3E%3Ccircle cx='72' cy='72' r='2'/%3E%3C/g%3E%3C/svg%3E");
+}
+@utility lp-geo-sm {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Cg fill='none' stroke='%23fff' stroke-opacity='.07'%3E%3Crect x='17' y='17' width='22' height='22'/%3E%3Crect x='17' y='17' width='22' height='22' transform='rotate(45 28 28)'/%3E%3C/g%3E%3C/svg%3E");
+}
+/* Bar progres program tanpa target dana. */
+@utility lp-bar-open {
+  background: repeating-linear-gradient(135deg, #f59e0b 0 8px, #fbc562 8px 16px);
 }

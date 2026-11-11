@@ -116,3 +116,16 @@ Rekomendasi: opsi 1. Bila PM menunda, P30 mengimplementasikan helper `track()` *
 
 ## 6. Di luar scope
 Testimoni; logo mitra/media/bank; halaman legal (T-49); donasi rutin, kalkulator zakat, qurban, aplikasi mobile, fundraiser (scope.md); A/B testing; chat widget; video hero; multi-bahasa; analytics pihak ketiga dengan cookie; perubahan alur checkout.
+
+## Amandemen 11 Nov 2026 — tampilan desain "Beranda — TebarKebaikan"
+
+PM menyerahkan desain beranda baru; hanya tampilan `/` (beserta header & footer publik) yang diubah, tanpa fitur baru. Urutan S1→S8 dan semua data tetap.
+
+- **AC-01 (headline):** H1 kini mengikuti desain: "Kebaikan kecil berdampak Besar untuk sesama". Baris "Tanpa wajib daftar · Kuitansi otomatis" diganti tiga butir: "Tanpa wajib daftar akun", "Kuitansi otomatis via email", "Rincian penyaluran terbuka".
+- **Klaim yang dipertahankan (AC-17):** "Donasi dalam hitungan detik" pindah ke subjudul S4; "Semua program diverifikasi tim kami sebelum tayang." tetap di langkah 1.
+- **S2:** tetap tiga angka dari DB (terkumpul, donasi, laporan) dengan ambang AC-05. "Program aktif" dan "Penerima manfaat" di desain tidak dipakai (tidak ada datanya).
+- **S3:** pencarian dan pengurutan di desain tidak dibuat (bukan fitur yang ada); filter kategori dan "Muat lebih banyak" tetap. Tombol "Donasi Sekarang" di kartu menuju `/donasi/{slug}`; lencana "Mendesak" untuk tenggat dua pekan atau kurang.
+- **S5:** angka demonstrasi di desain tidak dipakai; tetap ilustrasi tanpa angka (AC-04). Badge "Contoh tampilan" dihapus atas permintaan PM.
+- **S8:** CTA primer "Pilih Program Kebaikan" → `/#program`; sekunder "Jelajahi Semua Program" → `/campaign`.
+- **Ponsel:** di beranda, bottom nav diganti menu laci header dan bilah ajakan donasi mengambang; halaman lain tidak berubah.
+- **Palet:** warna desain dibatasi kelas `.lp` (`src/app/globals.css`); token global dan panel admin tidak berubah.

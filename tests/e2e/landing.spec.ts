@@ -11,13 +11,14 @@ async function jsonLd(page: Page) {
   return raw.map((r) => JSON.parse(r) as Record<string, unknown>);
 }
 
-test("LP-AC-01: tepat satu H1 berisi headline terpilih (alternatif A)", async ({ page }) => {
+test("LP-AC-01: tepat satu H1 berisi headline desain beranda (Nov 2026)", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Kebaikan kecil, dampak yang nyata.",
+    "Kebaikan kecil berdampak Besar untuk sesama",
   );
-  await expect(page.getByText("Tanpa wajib daftar · Kuitansi otomatis")).toBeVisible();
+  await expect(page.getByText("Tanpa wajib daftar akun")).toBeVisible();
+  await expect(page.getByText("Kuitansi otomatis via email")).toBeVisible();
 });
 
 test("LP-AC-03: section berurutan S1→S8, lalu footer", async ({ page }) => {
@@ -144,6 +145,10 @@ test("LP-AC-16: CTA & summary FAQ dapat dicapai dan diaktifkan dengan keyboard, 
   await page.keyboard.press("Enter");
   await expect(details).toHaveAttribute("open", "");
   await expect(page.getByRole("link", { name: /Pilih Program Kebaikan/ })).toHaveAttribute(
+    "href",
+    "/#program",
+  );
+  await expect(page.getByRole("link", { name: "Jelajahi Semua Program" })).toHaveAttribute(
     "href",
     "/campaign",
   );

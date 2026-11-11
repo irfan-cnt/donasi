@@ -32,7 +32,8 @@ const HIDE_ON = /^\/campaign\/[^/]+(\/pratinjau)?\/?$/;
 
 export function BottomNav() {
   const pathname = usePathname();
-  if (HIDE_ON.test(pathname)) return null;
+  // Beranda memakai bilah ajakan donasi & menu laci sesuai desainnya (landing-floating.tsx).
+  if (pathname === "/" || HIDE_ON.test(pathname)) return null;
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
