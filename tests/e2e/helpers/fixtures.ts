@@ -22,6 +22,9 @@ function attach(page: Page, origin: string, problems: string[]) {
     if (msg.type() !== "error") return;
     const text = msg.text();
     if (EXPECTED_4XX_CONSOLE.test(text)) return;
+    // Toolbar Vercel (vercel.live) disisipkan Vercel hanya di deployment Preview dan memang diblokir
+    // CSP kita; bukan error aplikasi. Hanya relevan untuk suite @sandbox yang berjalan di Preview.
+    if (text.includes("https://vercel.live/")) return;
     problems.push(`console.error: ${text}`);
   });
   page.on("response", (res) => {
