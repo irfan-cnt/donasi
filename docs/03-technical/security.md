@@ -161,3 +161,8 @@ CSP ketat untuk script (nonce per permintaan, tanpa `'unsafe-inline'`), `frame-a
 - **IP klien (I1):** `src/lib/http/client-ip.ts` — `x-vercel-forwarded-for` → entri pertama `x-forwarded-for` → `x-real-ip`, divalidasi `isIP`. Di luar Vercel header ini bisa dipalsukan (deployment selain Vercel wajib menimpa header di proxy depan).
 - **Upload admin (I4):** `requireAdminApi([...])` → 401/403 JSON.
 
+
+### Implementasi P30 (landing page & Vercel Web Analytics) + T-49 (halaman legal draf)
+- **Analytics:** `@vercel/analytics` 2.0.1 dipasang lewat `inject()` di `src/components/shared/web-analytics.tsx`, dirender hanya bila `VERCEL` di-set (layout publik, checkout, halaman berhasil). Mode `production` dipaksa → skrip `/_vercel/insights/script.js` dan endpoint `/_vercel/insights/*` **same-origin**; CSP **tidak diubah** (`script-src 'self'`, `connect-src 'self'` sudah cukup; skrip dev `va.vercel-scripts.com` tidak pernah dimuat). Tanpa cookie. Diuji `tests/e2e/csp.spec.ts` › "P30: analytics…".
+- **Privasi:** `beforeSend` membuang query/hash (token `?t=`) dan mengganti kode transaksi di path (`/transaksi/[code]`, `/akun/donasi/[code]`). Event hanya lewat wrapper `track()` (`src/lib/analytics.ts`): allowlist nama event & properti (maks. 2), nilai harus slug/path `^[a-z0-9_\-/]{1,120}$` → email, nama, nominal, kode transaksi tidak bisa terkirim. Di luar Vercel/test `window.va` tidak ada → no-op; semua error ditelan. Penanda sessionStorage (`tk:src:landing`, `tk:paid-view:{code}`) tidak pernah dikirim.
+- **Halaman legal:** statis dari `src/lib/legal/content.ts`; `/kontak` membaca hanya kunci `organization.*` (allowlist di `src/server/queries/public-organization.ts`), tanpa formulir. Draf = `noindex` + di luar sitemap.

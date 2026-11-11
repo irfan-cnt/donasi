@@ -8,6 +8,7 @@ import { GoogleSignInButton } from "@/components/donor/google-sign-in-button";
 import { Logo } from "@/components/shared/logo";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { auth } from "@/lib/auth";
+import { LEGAL_PAGES } from "@/lib/legal/content";
 import { sanitizeCallbackUrl } from "@/lib/auth/callback-url";
 import { signInWithGoogle } from "@/server/actions/auth-actions";
 
@@ -90,12 +91,39 @@ export default function LoginPage({ searchParams }: PageProps<"/masuk">) {
             ))}
           </ul>
           <p className="mt-8 text-xs text-ink-faint">
-            Dengan masuk, kamu menyetujui Syarat &amp; Ketentuan serta Kebijakan Privasi Tebar
-            Kebaikan.
+            Dengan masuk, kamu menyetujui{" "}
+            <Link
+              href="/syarat-ketentuan"
+              className="font-medium text-primary underline underline-offset-2"
+            >
+              Syarat &amp; Ketentuan
+            </Link>{" "}
+            serta{" "}
+            <Link
+              href="/kebijakan-privasi"
+              className="font-medium text-primary underline underline-offset-2"
+            >
+              Kebijakan Privasi
+            </Link>{" "}
+            Tebar Kebaikan.
           </p>
           <Link href="/" className="mt-4 inline-block text-sm font-semibold text-primary">
             ← Kembali ke beranda
           </Link>
+          {/* Tautan halaman legal (AC-32.2). */}
+          <footer className="mt-8 border-t border-border pt-4">
+            <nav aria-label="Informasi">
+              <ul className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-ink-faint">
+                {LEGAL_PAGES.map((p) => (
+                  <li key={p.path}>
+                    <Link href={p.path} className="hover:text-ink">
+                      {p.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          </footer>
         </div>
       </div>
     </main>

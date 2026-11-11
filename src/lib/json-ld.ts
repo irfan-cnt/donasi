@@ -104,3 +104,16 @@ export function newsJsonLd(input: {
     about: { "@type": "WebPage", name: input.campaignTitle, url: campaignUrl },
   };
 }
+
+/** FAQPage (P30): dibangun dari butir FAQ yang SAMA dengan yang dirender (visibleFaq). */
+export function faqJsonLd(entries: readonly { question: string; answer: string }[]) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: entries.map((e) => ({
+      "@type": "Question",
+      name: e.question,
+      acceptedAnswer: { "@type": "Answer", text: e.answer },
+    })),
+  };
+}

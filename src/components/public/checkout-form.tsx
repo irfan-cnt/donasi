@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { TrackDonationStart } from "@/components/shared/donation-tracking";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
@@ -119,6 +120,7 @@ export function CheckoutForm({
   return (
     <form action={action} onSubmit={onSubmit} noValidate>
       <input type="hidden" name="slug" value={slug} />
+      <TrackDonationStart slug={slug} />
       <input type="hidden" name="anonymous" value={anon ? "on" : ""} />
       <input type="hidden" name="waConsent" value={wa && phone.trim() ? "on" : ""} />
       {amountType === "open" ? (
@@ -329,7 +331,17 @@ export function CheckoutForm({
 
       <p className="mt-4 flex items-start gap-2 text-xs text-ink-faint">
         <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-        Dengan melanjutkan, kamu menyetujui Syarat & Ketentuan dan Kebijakan Privasi. Datamu tidak akan dibagikan ke pihak lain.
+        <span>
+          Dengan melanjutkan, kamu menyetujui{" "}
+          <Link href="/syarat-ketentuan" target="_blank" className="font-medium text-primary underline underline-offset-2">
+            Syarat & Ketentuan
+          </Link>{" "}
+          dan{" "}
+          <Link href="/kebijakan-privasi" target="_blank" className="font-medium text-primary underline underline-offset-2">
+            Kebijakan Privasi
+          </Link>
+          . Datamu hanya dipakai untuk memproses donasi ini dan tidak dijual ke pihak lain.
+        </span>
       </p>
       {/* Honeypot: tersembunyi dari manusia & pembaca layar. */}
       <div aria-hidden className="absolute -left-[9999px] h-px w-px overflow-hidden">

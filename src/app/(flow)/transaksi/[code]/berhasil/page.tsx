@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { FlowLayout } from "@/components/public/flow-layout";
+import { TrackPaidView } from "@/components/shared/donation-tracking";
+import { WebAnalytics } from "@/components/shared/web-analytics";
 import { TransactionSummary } from "@/components/public/transaction/transaction-summary";
 import { buttonVariants } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
@@ -34,6 +36,9 @@ export default async function SuccessPage({ params, searchParams }: PageProps<"/
 
   return (
     <FlowLayout title="Donasi Berhasil">
+      {/* AC-07.4: donation_paid_view sekali; URL analytics tanpa token & kode (web-analytics.tsx). */}
+      {process.env.VERCEL ? <WebAnalytics /> : null}
+      <TrackPaidView code={view.transaction.code} />
       <div className="text-center" data-testid="payment-success">
         <div className="relative mx-auto mt-4 flex size-24 items-center justify-center">
           <div className="pattern-islamic-dark absolute inset-0 rounded-full bg-success-soft" />

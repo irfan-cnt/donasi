@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./helpers/fixtures";
 import { ADMIN_COOKIE, cleanupAdmin, seedAdmin, seedAdminSession, type SeededAdmin } from "./helpers/admin-session";
 import { cleanupCheckout, seedTransaction } from "./helpers/checkout-data";
 import { SESSION_COOKIE, cleanupDonorSession, seedDonorSession, type SeededDonorSession } from "./helpers/donor-session";
@@ -53,12 +53,31 @@ test.beforeEach(async ({ page }) => {
 
 test("publik & checkout tanpa pelanggaran CSP", async ({ page }) => {
   const v = watchCsp(page);
-  for (const path of ["/", "/campaign", `/campaign/${OPEN}`, "/masuk", `/donasi/${OPEN}`, "/halaman-tidak-ada-p25"]) {
+  for (const path of ["/", "/campaign", `/campaign/${OPEN}`, "/masuk", `/donasi/${OPEN}`, "/halaman-tidak-ada-p25", "/kebijakan-privasi", "/kontak"]) {
     await visit(page, path, v);
   }
   // Interaksi klien tetap jalan setelah hidrasi (form checkout).
   await page.goto(`/donasi/${OPEN}`);
   await expect(page.locator("form").first()).toBeVisible();
+  expect(v).toEqual([]);
+});
+
+// P30: Vercel Web Analytics hanya dimuat di Vercel (skrip & endpoint same-origin /_vercel/insights/*
+// → tidak perlu melonggarkan CSP). Di luar Vercel tidak ada skrip/request analytics sama sekali.
+test("P30: analytics tanpa skrip/endpoint pihak ketiga; CSP tidak dilonggarkan", async ({ page }) => {
+  const external: string[] = [];
+  page.on("request", (r) => {
+    if (/vercel-scripts\.com|\/_vercel\/insights/.test(r.url())) external.push(r.url());
+  });
+  const v = watchCsp(page);
+  const res = await visit(page, "/", v);
+  const csp = res?.headers()["content-security-policy"] ?? "";
+  expect(csp).toMatch(/connect-src 'self'(;| ws:)/);
+  expect(csp).toMatch(/script-src 'self' 'nonce-[^']+' 'sha256-[^']+';/);
+  expect(csp).not.toContain("vercel-scripts");
+  await page.getByRole("link", { name: "Lihat Semua Program", exact: true }).click();
+  await page.waitForURL(/\/campaign$/);
+  expect(external).toEqual([]);
   expect(v).toEqual([]);
 });
 

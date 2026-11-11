@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { LEGAL_FINAL, LEGAL_PAGES } from "@/lib/legal/content";
 import { siteUrl } from "@/lib/site";
 import { getSitemapCampaigns, getSitemapNews } from "@/server/queries/public-campaigns";
 
@@ -10,6 +11,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     { url: `${base}/`, changeFrequency: "hourly", priority: 1 },
     { url: `${base}/campaign`, changeFrequency: "hourly", priority: 0.8 },
+    // Halaman legal hanya masuk sitemap setelah teks final (LEGAL_FINAL, T-49).
+    ...(LEGAL_FINAL
+      ? LEGAL_PAGES.map((p) => ({
+          url: `${base}${p.path}`,
+          changeFrequency: "monthly" as const,
+          priority: 0.3,
+        }))
+      : []),
     ...campaigns.map((c) => ({
       url: `${base}/campaign/${c.slug}`,
       lastModified: c.updatedAt,

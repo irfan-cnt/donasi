@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./helpers/fixtures";
 
 // Data: seed sample di Neon branch `dev` (4 campaign published: pendidikan, lainnya,
 // yatim-dhuafa, masjid). Kategori `kesehatan` hanya berisi draft → dipakai untuk empty state
@@ -65,7 +65,8 @@ test("empty state saat kategori tanpa campaign published", async ({ page }) => {
   await page.goto("/?kategori=kesehatan");
   await expect(page.getByTestId("empty-state")).toContainText("Belum ada program di kategori ini");
   await expect(page.locator('#program a[href^="/campaign/"]')).toHaveCount(0);
-  await page.getByRole("link", { name: "Lihat semua program" }).click();
+  // P30: hero kini juga punya "Lihat Semua Program" (→ /campaign); tautan empty state yang diuji.
+  await page.getByTestId("empty-state").getByRole("link", { name: "Lihat semua program" }).click();
   await expect(page).toHaveURL(/\/$/);
   expect(errors).toEqual([]);
 });
