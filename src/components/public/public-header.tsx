@@ -43,13 +43,16 @@ export function PublicHeader() {
           <Logo priority />
         </Link>
         <div className="flex min-w-0 flex-1 items-center justify-end gap-2.5">
-          <PublicHeaderNav
-            account={
-              <Suspense fallback={null}>
-                <AccountLink drawer />
-              </Suspense>
-            }
-          />
+          {/* usePathname() di rute dinamis harus di dalam Suspense (cacheComponents). */}
+          <Suspense fallback={<span className="order-last size-11 shrink-0 min-[1181px]:hidden" />}>
+            <PublicHeaderNav
+              account={
+                <Suspense fallback={null}>
+                  <AccountLink drawer />
+                </Suspense>
+              }
+            />
+          </Suspense>
           <Suspense fallback={<span className="h-11 w-24 max-sm:hidden" />}>
             <AccountLink />
           </Suspense>
