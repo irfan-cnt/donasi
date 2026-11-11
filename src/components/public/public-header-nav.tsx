@@ -112,7 +112,7 @@ export function PublicHeaderNav({ account }: { account: ReactNode }) {
         <SheetContent
           side="right"
           showCloseButton={false}
-          className="lp w-[min(360px,88vw)] gap-1 overflow-y-auto bg-white px-[18px] pt-4 pb-[calc(24px+env(safe-area-inset-bottom,0px))] text-base data-[side=right]:w-[min(360px,88vw)] data-[side=right]:sm:max-w-none"
+          className="lp w-[min(360px,88vw)] gap-1 overflow-y-auto bg-white text-ink px-[18px] pt-4 pb-[calc(24px+env(safe-area-inset-bottom,0px))] text-base data-[side=right]:w-[min(360px,88vw)] data-[side=right]:sm:max-w-none"
         >
           <div className="mb-2 flex items-center justify-between border-b border-[#EEF1ED] pb-4">
             <SheetTitle className="sr-only">Menu</SheetTitle>

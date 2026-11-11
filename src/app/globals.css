@@ -236,8 +236,8 @@
   --border: rgb(var(--tk-border));
   --input: rgb(var(--tk-border));
   --ring: rgb(var(--tk-primary));
-  color: rgb(var(--tk-ink));
 }
+/* Warna teks tidak diatur di sini: elemen .lp memakai utilitas (text-ink, text-white, …). */
 /* Di permukaan hijau tua, cincin fokus hijau tidak terlihat → oranye desain. */
 .lp-dark :focus-visible {
   outline: 3px solid #f59e0b;

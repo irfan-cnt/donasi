@@ -36,7 +36,7 @@ export function PublicHeader() {
   return (
     <header
       data-site-header
-      className="lp sticky top-0 z-30 border-b border-transparent bg-[rgb(250_250_247/0.9)] backdrop-blur-[14px] backdrop-saturate-[1.4] transition-[border-color,box-shadow] duration-200 data-[scrolled]:border-border data-[scrolled]:shadow-[0_8px_28px_-22px_rgba(6,68,38,.5)]"
+      className="lp sticky top-0 z-30 border-b text-ink border-transparent bg-[rgb(250_250_247/0.9)] backdrop-blur-[14px] backdrop-saturate-[1.4] transition-[border-color,box-shadow] duration-200 data-[scrolled]:border-border data-[scrolled]:shadow-[0_8px_28px_-22px_rgba(6,68,38,.5)]"
     >
       <div className={`${LP_WRAP} flex h-16 items-center gap-3 sm:h-[72px] sm:gap-6`}>
         <Link href="/" aria-label="Tebar Kebaikan — Beranda" className="shrink-0">

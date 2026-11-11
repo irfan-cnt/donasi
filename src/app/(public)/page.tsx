@@ -114,7 +114,7 @@ export default function HomePage({ searchParams }: PageProps<"/">) {
   const faq = visibleFaq();
   return (
     // .lp = palet desain beranda (globals.css); -mb-12 meniadakan jarak atas footer bersama.
-    <div className="lp -mb-12 overflow-x-clip bg-bg">
+    <div className="lp -mb-12 overflow-x-clip bg-bg text-ink">
       <JsonLd data={organizationJsonLd(siteUrl(), SITE_NAME)} />
       <JsonLd data={faqJsonLd(faq)} />
       <TrackClicks />
