@@ -37,6 +37,36 @@ export function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]!);
 }
 
+/** Label variabel untuk editor admin (P23). */
+export const TEMPLATE_VARIABLE_LABELS: Record<TemplateVariable, string> = {
+  donor_name: "Nama donatur",
+  donor_email: "Email donatur",
+  donor_phone: "Nomor WhatsApp donatur",
+  campaign_title: "Judul campaign",
+  transaction_id: "Kode transaksi",
+  donation_amount: "Nominal donasi",
+  payment_method: "Metode pembayaran",
+  payment_status: "Status pembayaran",
+  payment_url: "Tautan status transaksi",
+  payment_instruction: "Instruksi pembayaran",
+  created_at: "Waktu transaksi",
+};
+
+/** Data contoh pratinjau & kirim tes (P23). Fiktif — tidak pernah data donatur nyata. */
+export const SAMPLE_VARS: Required<TemplateVars> = {
+  donor_name: "Ahmad Fauzi",
+  donor_email: "ahmad.fauzi@contoh.id",
+  donor_phone: "+6281200000000",
+  campaign_title: "Sumur Bor untuk 300 Keluarga di Desa Oebelo, NTT",
+  transaction_id: "TK-261109-7QF3KD",
+  donation_amount: "Rp100.000",
+  payment_method: "BCA Virtual Account",
+  payment_status: "Berhasil",
+  payment_url: "https://contoh.id/transaksi/TK-261109-7QF3KD/menunggu",
+  payment_instruction: "Nomor Virtual Account: 1234 5678 9012 3456\nNominal: Rp100.000",
+  created_at: "9 November 2026 pukul 10.15 WIB",
+};
+
 export interface TemplateValidation {
   ok: boolean;
   /** Placeholder yang tidak ada di whitelist (apa adanya, dipangkas). */
@@ -68,8 +98,28 @@ export function validateTemplate(input: {
   if (input.channel === "email") {
     if (!input.subject?.trim()) errors.push("Subjek wajib untuk email");
     else if (input.subject.length > MAX_SUBJECT) errors.push(`Subjek maksimal ${MAX_SUBJECT} karakter`);
+    // P23: header injection — subjek satu baris.
+    else if (/[\r\n]/.test(input.subject)) errors.push("Subjek tidak boleh berisi baris baru");
   }
   return { ok: errors.length === 0, unknown: [...unknown], errors: [...new Set(errors)] };
+}
+
+/** Validasi per field (pesan error untuk subjek vs isi) — aturan sama dengan validateTemplate. */
+export function validateTemplateFields(input: {
+  channel: "email" | "whatsapp";
+  subject?: string | null;
+  body: string;
+}): { ok: boolean; subject: string[]; body: string[] } {
+  if (validateTemplate(input).ok) return { ok: true, subject: [], body: [] };
+  const body = validateTemplate({ channel: "whatsapp", body: input.body }).errors;
+  const subject =
+    input.channel === "email"
+      ? [
+          ...validateTemplate({ channel: "whatsapp", subject: input.subject ?? "", body: "x" }).errors,
+          ...validateTemplate({ channel: "email", subject: input.subject, body: "x" }).errors.filter((e) => e.startsWith("Subjek")),
+        ]
+      : [];
+  return { ok: false, subject: [...new Set(subject)], body };
 }
 
 /**

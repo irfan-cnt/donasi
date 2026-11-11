@@ -1,6 +1,6 @@
 import "server-only";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { getDb } from "@/lib/db";
+import { getDb, getTxDb } from "@/lib/db";
 import {
   notificationLogs,
   notificationTemplates,
@@ -170,4 +170,120 @@ export async function findWhatsappEnabledSetting(): Promise<boolean> {
     .where(eq(platformSettings.key, "notifications.whatsapp_enabled"))
     .limit(1);
   return row?.value === true;
+}
+
+// ---------------------------------------------------------------- P23 kirim ulang
+
+export interface ResendLogRow {
+  id: string;
+  channel: "email" | "whatsapp";
+  event: string;
+  status: LogStatus;
+  transactionId: string | null;
+  dedupKey: string | null;
+  isTest: boolean;
+  requestPayload: unknown;
+}
+
+export async function findLogById(id: string): Promise<ResendLogRow | null> {
+  const [row] = await getDb()
+    .select({
+      id: notificationLogs.id,
+      channel: notificationLogs.channel,
+      event: notificationLogs.event,
+      status: notificationLogs.status,
+      transactionId: notificationLogs.transactionId,
+      dedupKey: notificationLogs.dedupKey,
+      isTest: notificationLogs.isTest,
+      requestPayload: notificationLogs.requestPayload,
+    })
+    .from(notificationLogs)
+    .where(eq(notificationLogs.id, id))
+    .limit(1);
+  return row ?? null;
+}
+
+/** Ada baris non-tes `sent` untuk (event, transaksi, kanal)? (dedup event finansial, BR-32). */
+export async function hasSentLog(
+  transactionId: string,
+  event: string,
+  channel: "email" | "whatsapp",
+  excludeId?: string,
+): Promise<boolean> {
+  const [row] = await getDb()
+    .select({ id: notificationLogs.id })
+    .from(notificationLogs)
+    .where(
+      and(
+        eq(notificationLogs.transactionId, transactionId),
+        eq(notificationLogs.event, event),
+        eq(notificationLogs.channel, channel),
+        eq(notificationLogs.status, "sent"),
+        eq(notificationLogs.isTest, false),
+        excludeId ? sql`${notificationLogs.id} <> ${excludeId}` : undefined,
+      ),
+    )
+    .limit(1);
+  return !!row;
+}
+
+/** Payment terbaru transaksi (utamakan status tertentu, mis. `paid` untuk payment.paid). */
+export async function findLatestPaymentId(transactionId: string, preferStatus?: string): Promise<string | null> {
+  const [row] = await getDb()
+    .select({ id: payments.id })
+    .from(payments)
+    .where(eq(payments.transactionId, transactionId))
+    .orderBy(
+      preferStatus ? sql`(${payments.status} = ${preferStatus}) DESC` : sql`1`,
+      sql`${payments.createdAt} DESC`,
+    )
+    .limit(1);
+  return row?.id ?? null;
+}
+
+/** Kunci serialisasi per (transaksi, event, kanal): dedup event finansial (BR-32) & kirim ulang (P23). */
+export const notificationLockKey = (transactionId: string, event: string, channel: "email" | "whatsapp") =>
+  `notif:${transactionId}:${event}:${channel}`;
+
+type TxLike = { execute: (q: ReturnType<typeof sql>) => Promise<unknown> };
+
+/** pg_advisory_xact_lock di dalam transaksi `tx` (dilepas otomatis saat commit/rollback). */
+export async function lockNotificationKey(tx: TxLike, key: string): Promise<void> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${key}))`);
+}
+
+/**
+ * Jalankan `fn` sambil memegang advisory lock `key` (transaksi khusus lock; tulisan di `fn` memakai
+ * koneksi biasa dan sudah ter-commit sebelum lock dilepas, sehingga pemegang berikutnya melihatnya).
+ */
+export async function withNotificationLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  return getTxDb().transaction(async (tx) => {
+    await lockNotificationKey(tx, key);
+    return fn();
+  });
+}
+
+/** Ada kirim ulang NON-paksa lain untuk (transaksi, event, kanal) yang masih `queued`? */
+export async function hasQueuedResend(
+  db: { execute: (q: ReturnType<typeof sql>) => Promise<{ rows: unknown[] }> },
+  transactionId: string,
+  event: string,
+  channel: "email" | "whatsapp",
+): Promise<boolean> {
+  const r = await db.execute(sql`SELECT 1 FROM notification_logs WHERE transaction_id = ${transactionId}::uuid
+    AND event = ${event} AND channel = ${channel} AND status = 'queued' AND is_test = false
+    AND dedup_key LIKE 'resend:%' AND coalesce(request_payload->>'forced', 'false') <> 'true' LIMIT 1`);
+  return r.rows.length > 0;
+}
+
+/** Ada baris `sent` non-tes untuk (transaksi, event, kanal)? Versi dalam transaksi (koneksi `db`). */
+export async function hasSentLogTx(
+  db: { execute: (q: ReturnType<typeof sql>) => Promise<{ rows: unknown[] }> },
+  transactionId: string,
+  event: string,
+  channel: "email" | "whatsapp",
+): Promise<boolean> {
+  const r = await db.execute(sql`SELECT 1 FROM notification_logs WHERE transaction_id = ${transactionId}::uuid
+    AND event = ${event} AND channel = ${channel} AND status = 'sent' AND is_test = false LIMIT 1`);
+  return r.rows.length > 0;
 }

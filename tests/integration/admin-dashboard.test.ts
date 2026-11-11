@@ -127,7 +127,8 @@ describe.skipIf(!ENABLED)("dashboard admin (integration)", () => {
     // stabil sebelum & sesudah panggilan service (snapshot konsisten).
     let m: Manual | undefined;
     let data: Awaited<ReturnType<typeof getAdminDashboard>> | undefined;
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 20; i++) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 500));
       const before = await manual();
       data = await getAdminDashboard(perms.owner!, range);
       const after = await manual();
@@ -136,7 +137,7 @@ describe.skipIf(!ENABLED)("dashboard admin (integration)", () => {
         break;
       }
     }
-    if (!m || !data) throw new Error("data dev tidak stabil selama 5 percobaan");
+    if (!m || !data) throw new Error("data dev tidak stabil selama 20 percobaan");
     expect(data.transactions!.kpis).toEqual({
       paidAmount: BigInt(m!.paid_amount),
       paidCount: m!.paid_count,

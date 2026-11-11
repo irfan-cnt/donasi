@@ -1,7 +1,7 @@
 import { hasPermission, type Permission } from "./permissions";
 
-// Menu admin (mockup AdminShell). Rute yang belum dibangun (P21–P23) sudah ada sebagai halaman
-// "Segera hadir" yang dijaga requireAdmin(permission) yang sama — tidak ada tautan 404.
+// Menu admin (mockup AdminShell). Setiap halaman memanggil requireAdmin(permission) yang sama
+// dengan item menunya (BR-40).
 export type AdminNavIcon =
   | "dashboard"
   | "campaign"
@@ -70,10 +70,4 @@ export function navForPermissions(granted: readonly string[]): AdminNavGroup[] {
     ...g,
     items: g.items.filter((i) => i.permission === null || hasPermission(granted, i.permission)),
   })).filter((g) => g.items.length > 0);
-}
-
-/** Permission halaman stub berdasarkan href (dipakai halaman "Segera hadir"). */
-export function navItem(href: string): AdminNavItem {
-  for (const g of ADMIN_NAV) for (const i of g.items) if (i.href === href) return i;
-  throw new Error(`Menu admin tidak dikenal: ${href}`);
 }

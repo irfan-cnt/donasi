@@ -138,7 +138,7 @@ describe.skipIf(!ENABLED)("notify P16 (integration)", () => {
   beforeAll(async () => {
     const [cat] = await sql`select id from campaign_categories order by sort_order limit 1`;
     const [m] = await sql`select m.id, m.provider_id from payment_methods m join payment_providers p
-      on p.id = m.provider_id where p.code = 'midtrans' and m.type = 'virtual_account' limit 1`;
+      on p.id = m.provider_id where p.code = 'midtrans' and left(m.code, 3) <> 'it_' and m.type = 'virtual_account' limit 1`;
     const tpl = await sql`select event from notification_templates where is_active and channel = 'email'`;
     if (!cat || !m || tpl.length < 4) throw new Error("reference seed belum ada (pnpm db:seed)");
     methodId = m.id as string;

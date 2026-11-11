@@ -70,6 +70,14 @@ export interface CampaignEditorProps {
 let keySeq = 0;
 const newKey = () => `k${Date.now().toString(36)}${(keySeq++).toString(36)}`;
 
+type EditorMessage = { tone: "error" | "success" | "warning"; text: string };
+const FLASH_TTL_MS = 5_000;
+let flash: { id: string; at: number; message: EditorMessage } | null = null;
+function takeFlash(id: string | null): EditorMessage | null {
+  if (!flash || !id || flash.id !== id || Date.now() - flash.at > FLASH_TTL_MS) return null;
+  return flash.message;
+}
+
 export function CampaignEditor(props: CampaignEditorProps) {
   const { campaignId, status, categories, canWrite, canPublish } = props;
   const router = useRouter();
@@ -77,7 +85,13 @@ export function CampaignEditor(props: CampaignEditorProps) {
   const [slugTouched, setSlugTouched] = useState(!!campaignId);
   const [pending, start] = useTransition();
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [message, setMessage] = useState<{ tone: "error" | "success" | "warning"; text: string } | null>(null);
+  // router.refresh() setelah simpan bisa me-remount editor (Suspense menampilkan fallback sesaat),
+  // sehingga state pesan hilang. Pesan terakhir disimpan sebentar di luar komponen dan dipulihkan.
+  const [message, setMessageState] = useState<EditorMessage | null>(() => takeFlash(campaignId));
+  const setMessage = (m: EditorMessage | null) => {
+    flash = m && campaignId ? { id: campaignId, at: Date.now(), message: m } : null;
+    setMessageState(m);
+  };
   const [newSuggestion, setNewSuggestion] = useState("");
 
   const set = <K extends keyof CampaignEditorValues>(key: K, value: CampaignEditorValues[K]) =>

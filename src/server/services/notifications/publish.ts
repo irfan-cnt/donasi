@@ -1,7 +1,7 @@
 import "server-only";
 import { getEnv } from "@/lib/env";
 import type { Logger } from "@/lib/logger";
-import { qstashDedupId, type NotifyJob, type WhatsappJob } from "@/lib/notifications/jobs";
+import { qstashDedupId, type NotifyJob, type ResendJob, type WhatsappJob } from "@/lib/notifications/jobs";
 import { publishJob } from "@/lib/qstash";
 import { siteUrl } from "@/lib/site";
 
@@ -60,5 +60,20 @@ export async function publishWhatsappJob(job: WhatsappJob, log: Logger): Promise
     deduplicationId: qstashDedupId(job),
     retries: 3,
     flowControl: whatsappFlowControl(Number(env.FONNTE_MIN_DELAY_MS) || 3000),
+  });
+}
+
+/**
+ * P23: job `notification.resend` → /api/jobs/notify. WA memakai flow control global yang sama
+ * (jeda Fonnte). Tanpa QSTASH_TOKEN → error (baris kirim ulang ditandai gagal diantrekan, tidak
+ * pernah dikirim langsung tanpa antrean).
+ */
+export async function publishResendJob(job: ResendJob, channel: "email" | "whatsapp"): Promise<void> {
+  const env = getEnv();
+  if (!env.QSTASH_TOKEN) throw new Error("QSTASH_TOKEN kosong; kirim ulang tidak dapat diantrekan");
+  await publishJob(`${siteUrl()}/api/jobs/notify`, job, {
+    deduplicationId: qstashDedupId(job),
+    retries: 3,
+    ...(channel === "whatsapp" ? { flowControl: whatsappFlowControl(Number(env.FONNTE_MIN_DELAY_MS) || 3000) } : {}),
   });
 }

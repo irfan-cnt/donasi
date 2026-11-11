@@ -158,9 +158,18 @@ test.describe("admin campaign & berita (P21)", () => {
       if (SHOT_DIR && width !== 768) await page.screenshot({ path: `${SHOT_DIR}/campaign-list-${width}.png`, fullPage: true });
 
       await page.goto("/admin/campaign?status=published");
-      const first = page.locator(width >= 768 ? "[data-testid=campaign-table] a" : "[data-testid=campaign-rows-mobile] a").filter({ visible: true }).first();
-      await page.goto((await first.getAttribute("href"))!);
-      await expect(page.getByRole("heading", { name: "Edit Campaign" })).toBeVisible();
+      // Spec lain (paralel, DB dev bersama) membuat & menghapus campaign terbit: bila campaign yang
+      // dipilih keburu dihapus, ambil ulang dari daftar. Asersi akhirnya tetap sama.
+      const heading = page.getByRole("heading", { name: "Edit Campaign" });
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) await page.goto("/admin/campaign?status=published");
+        const first = page.locator(width >= 768 ? "[data-testid=campaign-table] a" : "[data-testid=campaign-rows-mobile] a").filter({ visible: true }).first();
+        await page.goto((await first.getAttribute("href"))!);
+        if (await heading.isVisible().catch(() => false)) break;
+        await heading.waitFor({ state: "visible", timeout: 3000 }).catch(() => undefined);
+        if (await heading.isVisible().catch(() => false)) break;
+      }
+      await expect(heading).toBeVisible();
       await expect(page.locator("#c-desc").filter({ visible: true })).toBeVisible();
       expect(await noOverflow(page), `editor overflow di ${width}px`).toBe(true);
       if (SHOT_DIR && width !== 768) await page.screenshot({ path: `${SHOT_DIR}/campaign-editor-${width}.png`, fullPage: true });

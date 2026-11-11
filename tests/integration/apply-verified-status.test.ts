@@ -88,7 +88,7 @@ describe.skipIf(!ENABLED)("applyVerifiedStatus (integration)", () => {
   beforeAll(async () => {
     const [cat] = await sql`select id from campaign_categories order by sort_order limit 1`;
     const [m] =
-      await sql`select m.id, m.provider_id from payment_methods m join payment_providers p on p.id = m.provider_id where p.code = 'midtrans' limit 1`;
+      await sql`select m.id, m.provider_id from payment_methods m join payment_providers p on p.id = m.provider_id where p.code = 'midtrans' and left(m.code, 3) <> 'it_' limit 1`;
     if (!cat || !m) throw new Error("reference seed belum ada (pnpm db:seed)");
     methodId = m.id as string;
     providerId = m.provider_id as string;

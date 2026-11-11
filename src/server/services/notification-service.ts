@@ -5,7 +5,9 @@ import { formatRupiah } from "@/lib/money";
 import { renderEmailLayout, type EmailOrganization } from "@/lib/notifications/email-layout";
 import {
   dedupKey,
+  FINANCIAL_EVENTS,
   notifyJobSchema,
+  type ResendJob,
   type AdminAlertJob,
   type DonorJob,
   type NotifyJob,
@@ -19,6 +21,7 @@ import {
   renderSubject,
   renderTemplate,
   type TemplateVars,
+  validateTemplate,
 } from "@/lib/notifications/template";
 import { renderInstructionSections } from "@/lib/payments/instruction-template";
 import { SITE_NAME } from "@/lib/site";
@@ -26,7 +29,12 @@ import { FonnteError, toFonnteTarget, type WhatsappSender } from "@/lib/whatsapp
 import {
   claimNotificationLog,
   findActiveTemplate,
+  findLatestPaymentId,
+  findLogById,
   findNotificationContext,
+  hasSentLog,
+  notificationLockKey,
+  withNotificationLock,
   findOrganizationSettings,
   findWhatsappEnabledSetting,
   updateNotificationLog,
@@ -169,6 +177,52 @@ export function buildVars(ctx: NotificationContext, siteUrl: string): TemplateVa
   };
 }
 
+/**
+ * Template aktif yang LOLOS validasi whitelist lagi saat render (P23: satu aturan untuk simpan,
+ * pratinjau, dan kirim). Template rusak (mis. diubah langsung di DB) → null = "template tidak aktif".
+ */
+async function activeTemplate(event: string, channel: "email" | "whatsapp", deps: NotifyDeps) {
+  const t = await findActiveTemplate(event, channel);
+  if (!t) return null;
+  if (!validateTemplate({ channel, subject: t.subject, body: t.body }).ok) {
+    deps.log.error("notify: template aktif tidak valid; tidak dipakai", { event, channel, templateId: t.id });
+    // P23 (L1): notifikasi donor berhenti diam-diam → alert admin (dedup per event+kanal per hari WIB).
+    await deps
+      .publishAdminAlert(
+        {
+          event: "admin.alert",
+          kind: "template_invalid",
+          alert: `${event}_${channel}`.replace(/[^a-z0-9_]/g, "_").slice(0, 40),
+          date: jakartaDay((deps.now ?? (() => new Date()))()),
+        },
+        deps.log,
+      )
+      .catch((e: unknown) => deps.log.error("publish alert template gagal", { error: safeErrorCode(e) }));
+    return null;
+  }
+  return t;
+}
+
+const isFinancial = (event: string) => (FINANCIAL_EVENTS as readonly string[]).includes(event);
+
+/** Snapshot transaksi yang sudah dianonimkan (OD-14, anonymizeDonorAccount): email `deleted+…@invalid`. */
+export const isAnonymizedRecipient = (email: string) => /^deleted\+[^@]*@invalid$/i.test(email);
+
+/**
+ * M1: event finansial diproses berurutan per (transaksi, event, kanal) dengan advisory lock, lalu
+ * di dalam lock: bila sudah ada baris `sent` lain (pipeline normal, retry, atau kirim ulang) dan baris
+ * ini tidak dipaksa → `skipped`. Mencakup tumpang tindih kirim ulang × retry pipeline normal.
+ */
+async function serialised<T>(
+  key: { transactionId: string | null; event: string; channel: "email" | "whatsapp" },
+  fn: () => Promise<T>,
+): Promise<T> {
+  if (!key.transactionId || !isFinancial(key.event)) return fn();
+  return withNotificationLock(notificationLockKey(key.transactionId, key.event, key.channel), fn);
+}
+
+const ALREADY_SENT = "sudah terkirim (dedup BR-32); gunakan kirim ulang paksa";
+
 async function organization(siteUrl: string): Promise<EmailOrganization> {
   const s = await findOrganizationSettings();
   return { name: s.name ?? SITE_NAME, address: s.address ?? "", siteUrl };
@@ -201,10 +255,18 @@ interface EmailPlan {
   /** null = lewati dengan alasan `skipReason`. */
   build: (() => Promise<{ subject: string; html: string; text: string; attachments?: EmailAttachment[] }>) | null;
   skipReason?: string;
+  /** Kirim ulang paksa (P23): lewati dedup finansial. */
+  forced?: boolean;
 }
 
 /** Klaim log → (lewati | kirim) → perbarui log. Melempar bila SMTP gagal (agar QStash retry). */
-async function deliverEmail(plan: EmailPlan, deps: NotifyDeps, now: Date): Promise<ChannelOutcome> {
+function deliverEmail(plan: EmailPlan, deps: NotifyDeps, now: Date): Promise<ChannelOutcome> {
+  return serialised({ transactionId: plan.transactionId, event: plan.event, channel: "email" }, () =>
+    deliverEmailLocked(plan, deps, now),
+  );
+}
+
+async function deliverEmailLocked(plan: EmailPlan, deps: NotifyDeps, now: Date): Promise<ChannelOutcome> {
   const skipReason = !deps.config.enabled
     ? "NOTIFICATIONS_ENABLED=false"
     : !plan.recipient
@@ -227,6 +289,15 @@ async function deliverEmail(plan: EmailPlan, deps: NotifyDeps, now: Date): Promi
   }
   if (skipReason) {
     if (!claimed.created) await updateNotificationLog(claimed.id, { status: "skipped", errorMessage: skipReason });
+    return "skipped";
+  }
+  if (
+    !plan.forced &&
+    plan.transactionId &&
+    isFinancial(plan.event) &&
+    (await hasSentLog(plan.transactionId, plan.event, "email", claimed.id))
+  ) {
+    await updateNotificationLog(claimed.id, { status: "skipped", errorMessage: ALREADY_SENT });
     return "skipped";
   }
   const attempt = claimed.attempt + 1;
@@ -293,7 +364,7 @@ async function recordWhatsapp(job: DonorJob, ctx: NotificationContext, deps: Not
   // BR-26: consent = centang WA pada transaksi (snapshot saat checkout). Tanpa opt-in → tidak ada baris.
   if (!ctx.whatsappOptIn) return undefined;
   const reason = await whatsappSkipReason(job.event, ctx, deps, stale);
-  const template = reason ? null : await findActiveTemplate(job.event, "whatsapp");
+  const template = reason ? null : await activeTemplate(job.event, "whatsapp", deps);
   const skip = reason ?? (template ? null : "template WhatsApp tidak aktif");
   const claimed = await claimNotificationLog({
     channel: "whatsapp",
@@ -326,42 +397,71 @@ const WA_ALERT_CODES = new Set(["invalid_token", "device_disconnected"]);
 
 /** Tahap 2 (job `whatsapp.send`): cek ulang gate, render template, kirim via Fonnte, perbarui log. */
 async function handleWhatsappJob(job: WhatsappJob, deps: NotifyDeps, now: Date): Promise<NotifySummary> {
-  const source = whatsappSource(job);
   const ctx = await findNotificationContext(job.transactionId, job.paymentId);
   if (!ctx || !ctx.payment) {
     deps.log.warn("notify: transaksi/payment tidak ditemukan; diabaikan", { event: job.event });
     return { event: job.event, ignored: "not_found" };
   }
+  const whatsapp = await deliverWhatsapp(
+    { event: job.source, dedupKey: dedupKey(whatsappSource(job), "whatsapp"), ctx },
+    deps,
+    now,
+  );
+  return { event: job.event, whatsapp };
+}
+
+/**
+ * Kirim satu WA untuk baris log `dedupKey` (job whatsapp.send & kirim ulang P23). Consent (OD-19)
+ * dan semua gate dicek ulang di sini — kirim ulang paksa pun tidak melewatinya.
+ */
+type WhatsappPlan = {
+  event: string;
+  dedupKey: string;
+  ctx: NotificationContext;
+  extraPayload?: Record<string, unknown>;
+  forced?: boolean;
+};
+
+function deliverWhatsapp(plan: WhatsappPlan, deps: NotifyDeps, now: Date): Promise<ChannelOutcome> {
+  return serialised({ transactionId: plan.ctx.transactionId, event: plan.event, channel: "whatsapp" }, () =>
+    deliverWhatsappLocked(plan, deps, now),
+  );
+}
+
+async function deliverWhatsappLocked(plan: WhatsappPlan, deps: NotifyDeps, now: Date): Promise<ChannelOutcome> {
+  const { ctx, event } = plan;
   const stale =
-    job.source === "payment.pending" && ctx.payment.status !== "pending"
+    event === "payment.pending" && ctx.payment && ctx.payment.status !== "pending"
       ? `status payment sudah ${ctx.payment.status}`
       : null;
-  const template = await findActiveTemplate(job.source, "whatsapp");
+  const template = await activeTemplate(event, "whatsapp", deps);
   const vars = buildVars(ctx, deps.config.siteUrl);
   const reason = !ctx.whatsappOptIn
     ? "tanpa consent WhatsApp"
-    : ((await whatsappSkipReason(job.source, ctx, deps, stale)) ?? (template ? null : "template WhatsApp tidak aktif"));
+    : ((await whatsappSkipReason(event, ctx, deps, stale)) ?? (template ? null : "template WhatsApp tidak aktif"));
   const claimed = await claimNotificationLog({
     channel: "whatsapp",
     recipient: ctx.donorPhone ?? "-",
-    event: job.source,
-    dedupKey: dedupKey(source, "whatsapp"),
-    transactionId: job.transactionId,
+    event,
+    dedupKey: plan.dedupKey,
+    transactionId: ctx.transactionId,
     templateId: template?.id ?? null,
     templateVersion: template?.version ?? null,
     requestPayload: null,
     status: reason ? "skipped" : "queued",
     errorMessage: reason,
   });
-  if (!claimed.created && (claimed.status === "sent" || claimed.status === "skipped")) {
-    return { event: job.event, whatsapp: "duplicate" };
-  }
+  if (!claimed.created && (claimed.status === "sent" || claimed.status === "skipped")) return "duplicate";
   if (reason) {
     if (!claimed.created) await updateNotificationLog(claimed.id, { status: "skipped", errorMessage: reason });
-    return { event: job.event, whatsapp: "skipped" };
+    return "skipped";
+  }
+  if (!plan.forced && isFinancial(event) && (await hasSentLog(ctx.transactionId, event, "whatsapp", claimed.id))) {
+    await updateNotificationLog(claimed.id, { status: "skipped", errorMessage: ALREADY_SENT });
+    return "skipped";
   }
   const attempt = claimed.attempt + 1;
-  const payload = redactPayload(vars);
+  const payload = { ...redactPayload(vars), ...plan.extraPayload };
   try {
     const res = await deps.whatsapp.send({
       target: toFonnteTarget(ctx.donorPhone)!,
@@ -377,7 +477,7 @@ async function handleWhatsappJob(job: WhatsappJob, deps: NotifyDeps, now: Date):
       templateId: template!.id,
       templateVersion: template!.version,
     });
-    return { event: job.event, whatsapp: "sent" };
+    return "sent";
   } catch (e) {
     const fe = e instanceof FonnteError ? e : null;
     const code = fe ? `fonnte:${fe.code}` : safeErrorCode(e);
@@ -388,7 +488,7 @@ async function handleWhatsappJob(job: WhatsappJob, deps: NotifyDeps, now: Date):
       providerResponse: fe?.response ?? null,
       requestPayload: payload,
     });
-    deps.log.error("whatsapp: kirim gagal", { event: job.source, attempt, error: code });
+    deps.log.error("whatsapp: kirim gagal", { event, attempt, error: code });
     if (fe && WA_ALERT_CODES.has(fe.code)) {
       await deps
         .publishAdminAlert(
@@ -398,7 +498,7 @@ async function handleWhatsappJob(job: WhatsappJob, deps: NotifyDeps, now: Date):
         .catch((err: unknown) => deps.log.error("publish alert WhatsApp gagal", { error: safeErrorCode(err) }));
     }
     // Gagal permanen (token/device/nomor/kuota) → tidak di-retry; admin bisa kirim ulang (P23).
-    if (fe && !fe.retryable) return { event: job.event, whatsapp: "failed" };
+    if (fe && !fe.retryable) return "failed";
     throw new NotificationDeliveryError(code);
   }
 }
@@ -415,7 +515,7 @@ async function handleDonorJob(job: DonorJob, deps: NotifyDeps, now: Date): Promi
       ? `status payment sudah ${ctx.payment.status}`
       : null;
   const vars = buildVars(ctx, deps.config.siteUrl);
-  const template = await findActiveTemplate(job.event, "email");
+  const template = await activeTemplate(job.event, "email", deps);
   let deliveryError: unknown = null;
   let email: ChannelOutcome | undefined;
   try {
@@ -468,7 +568,7 @@ async function handleReceiptJob(job: ReceiptJob, deps: NotifyDeps, now: Date): P
   }
   const loadReceipt = deps.loadReceipt ?? defaultLoadReceipt;
   const vars = { ...buildVars(ctx, deps.config.siteUrl), payment_url: `${deps.config.siteUrl}/akun/donasi/${ctx.code}` };
-  const template = await findActiveTemplate(job.event, "email");
+  const template = await activeTemplate(job.event, "email", deps);
   const email = await deliverEmail(
     {
       event: job.event,
@@ -495,6 +595,111 @@ async function handleReceiptJob(job: ReceiptJob, deps: NotifyDeps, now: Date): P
     now,
   );
   return { event: job.event, email };
+}
+
+/** Isi email (template → layout; receipt.issued + lampiran PDF). Dipakai kirim ulang P23. */
+function emailBuilder(
+  event: string,
+  template: { subject: string | null; body: string },
+  vars: TemplateVars,
+  transactionId: string,
+  deps: NotifyDeps,
+): NonNullable<EmailPlan["build"]> {
+  return async () => {
+    const subject = renderSubject(template.subject ?? "", vars);
+    const body = renderTemplate(template.body, vars);
+    const layout = renderEmailLayout({ subject, body, org: await organization(deps.config.siteUrl) });
+    if (event !== "receipt.issued") return { subject, ...layout };
+    const pdf = await (deps.loadReceipt ?? defaultLoadReceipt)(transactionId);
+    if (!pdf) throw new Error("kuitansi belum tersedia");
+    return { subject, ...layout, attachments: [{ filename: pdf.filename, content: pdf.body, contentType: "application/pdf" }] };
+  };
+}
+
+/** Metadata baris kirim ulang (request_payload awal, ditulis server action P23). */
+export interface ResendMeta {
+  resend_of: string;
+  forced: boolean;
+  payment_id: string | null;
+}
+
+function resendMeta(payload: unknown): ResendMeta | null {
+  const p = (payload && typeof payload === "object" ? payload : {}) as Record<string, unknown>;
+  if (typeof p.resend_of !== "string") return null;
+  return {
+    resend_of: p.resend_of,
+    forced: p.forced === true,
+    payment_id: typeof p.payment_id === "string" ? p.payment_id : null,
+  };
+}
+
+/**
+ * Kirim ulang (P23): baris `resend:…` yang dibuat admin diproses dengan gate yang sama seperti
+ * pengiriman asli — consent WA (tidak bisa dipaksa), flag env, kuota email, flow control Fonnte
+ * (job WA dipublish dengan flow control), template aktif tervalidasi. Event finansial yang sudah
+ * `sent` di-dedup lagi di sini kecuali baris ditandai paksa.
+ */
+async function handleResendJob(job: ResendJob, deps: NotifyDeps, now: Date): Promise<NotifySummary> {
+  const row = await findLogById(job.logId);
+  const meta = row ? resendMeta(row.requestPayload) : null;
+  if (!row || !meta || row.isTest || !row.transactionId || !row.dedupKey?.startsWith("resend:")) {
+    deps.log.warn("notify: baris kirim ulang tidak valid; diabaikan");
+    return { event: job.event, ignored: "not_found" };
+  }
+  const channel = row.channel;
+  if (row.status === "sent" || row.status === "skipped") return { event: job.event, [channel]: "duplicate" };
+  const skip = async (reason: string) => {
+    await updateNotificationLog(row.id, { status: "skipped", errorMessage: reason });
+    return { event: job.event, [channel]: "skipped" as const };
+  };
+  const ctx = await findNotificationContext(row.transactionId, meta.payment_id);
+  if (!ctx || (row.event !== "receipt.issued" && !ctx.payment)) return skip("transaksi/payment tidak ditemukan");
+  if (row.event === "receipt.issued" && ctx.transactionStatus !== "paid") return skip("transaksi belum lunas");
+  if (isAnonymizedRecipient(ctx.donorEmail)) return skip("data donatur sudah dianonimkan (OD-14)");
+  const extraPayload = { resend_of: meta.resend_of, forced: meta.forced };
+  if (channel === "whatsapp") {
+    const whatsapp = await deliverWhatsapp({ event: row.event, dedupKey: row.dedupKey, ctx, extraPayload, forced: meta.forced }, deps, now);
+    return { event: job.event, whatsapp };
+  }
+  const vars =
+    row.event === "receipt.issued"
+      ? { ...buildVars(ctx, deps.config.siteUrl), payment_url: `${deps.config.siteUrl}/akun/donasi/${ctx.code}` }
+      : buildVars(ctx, deps.config.siteUrl);
+  const stale =
+    row.event === "payment.pending" && ctx.payment && ctx.payment.status !== "pending"
+      ? `status payment sudah ${ctx.payment.status}`
+      : undefined;
+  const template = await activeTemplate(row.event, "email", deps);
+  const email = await deliverEmail(
+    {
+      event: row.event,
+      dedupKey: row.dedupKey,
+      transactionId: row.transactionId,
+      recipient: ctx.donorEmail,
+      template: template ? { id: template.id, version: template.version } : null,
+      payload: { ...redactPayload(vars), ...extraPayload },
+      skipReason: stale,
+      forced: meta.forced,
+      build: template ? emailBuilder(row.event, template, vars, row.transactionId, deps) : null,
+    },
+    deps,
+    now,
+  );
+  return { event: job.event, email };
+}
+
+/** Payment untuk konteks kirim ulang: pending/failed dari dedup_key asal, selainnya payment terbaru. */
+export async function resolveResendPaymentId(original: {
+  event: string;
+  dedupKey: string | null;
+  transactionId: string;
+}): Promise<string | null> {
+  if (original.event === "receipt.issued") return null;
+  const parts = original.dedupKey?.split(":") ?? [];
+  // payment.pending/failed: `event:trx:payment:channel`
+  if (parts.length === 4 && parts[1] === original.transactionId) return parts[2]!;
+  const prefer = original.event === "payment.paid" ? "paid" : original.event === "payment.expired" ? "expired" : undefined;
+  return findLatestPaymentId(original.transactionId, prefer);
 }
 
 async function defaultLoadReceipt(transactionId: string) {
@@ -527,6 +732,12 @@ export function renderAdminAlert(job: AdminAlertJob): { subject: string; body: s
     lines.push(
       `Jenis: ${job.alert ?? "-"}`,
       "Periksa device & token di dashboard Fonnte. Pesan yang gagal bisa dikirim ulang dari admin (P23).",
+    );
+  } else if (job.kind === "template_invalid") {
+    title = "Template notifikasi aktif tidak valid — notifikasi donatur dilewati";
+    lines.push(
+      `Template: ${job.alert ?? "-"}`,
+      "Template aktif berisi variabel/format yang tidak diizinkan sehingga notifikasi dicatat `skipped`. Perbaiki di admin › Template Notifikasi, lalu kirim ulang dari Log Notifikasi.",
     );
   } else if (job.kind === "email_quota") {
     title = "Kuota email harian hampir habis";
@@ -591,5 +802,6 @@ export async function processNotifyJob(body: unknown, deps: NotifyDeps): Promise
   }
   if (job.event === "admin.alert") return handleAdminAlert(job, deps, now);
   if (job.event === "whatsapp.send") return handleWhatsappJob(job, deps, now);
+  if (job.event === "notification.resend") return handleResendJob(job, deps, now);
   return handleDonorJob(job, deps, now);
 }

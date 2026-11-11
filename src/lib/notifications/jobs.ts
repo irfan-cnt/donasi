@@ -39,7 +39,7 @@ export const whatsappJobSchema = z.object({
   paymentId: uuid,
 });
 
-export const ADMIN_ALERT_KINDS = ["reconciliation", "payment", "email_quota", "whatsapp"] as const;
+export const ADMIN_ALERT_KINDS = ["reconciliation", "payment", "email_quota", "whatsapp", "template_invalid"] as const;
 
 export const adminAlertJobSchema = z.object({
   event: z.literal("admin.alert"),
@@ -61,17 +61,37 @@ export const adminAlertJobSchema = z.object({
   counts: z.record(z.string().regex(/^[A-Za-z0-9_]{1,40}$/), z.number().int()).optional(),
 });
 
+/**
+ * P23: kirim ulang dari admin. Baris notification_logs baru (`queued`, dedup_key `resend:…`) sudah
+ * dibuat oleh server action; handler memuat ulang konteks dari DB dan menerapkan gate yang sama
+ * (consent WA, NOTIFICATIONS_ENABLED/WHATSAPP_ENABLED, kuota email harian, flow control Fonnte).
+ */
+export const resendJobSchema = z.object({
+  event: z.literal("notification.resend"),
+  logId: uuid,
+});
+
+/** Event donor yang boleh dikirim ulang admin (P23). */
+export const RESENDABLE_EVENTS = [...DONOR_EVENTS, "receipt.issued"] as const;
+/**
+ * Event finansial (konfirmasi uang diterima): bila sudah `sent`, kirim ulang tetap di-dedup kecuali
+ * "kirim ulang paksa" dengan alasan (BR-32, P23). pending/failed/expired = pengingat → boleh diulang.
+ */
+export const FINANCIAL_EVENTS = ["payment.paid", "receipt.issued"] as const;
+
 export const notifyJobSchema = z.discriminatedUnion("event", [
   donorJobSchema,
   receiptJobSchema,
   adminAlertJobSchema,
   whatsappJobSchema,
+  resendJobSchema,
 ]);
 
 export type DonorJob = z.infer<typeof donorJobSchema>;
 export type ReceiptJob = z.infer<typeof receiptJobSchema>;
 export type WhatsappJob = z.infer<typeof whatsappJobSchema>;
 export type AdminAlertJob = z.infer<typeof adminAlertJobSchema>;
+export type ResendJob = z.infer<typeof resendJobSchema>;
 export type NotifyJob = z.infer<typeof notifyJobSchema>;
 
 /**
@@ -80,6 +100,7 @@ export type NotifyJob = z.infer<typeof notifyJobSchema>;
  * attempt (ganti metode, BR-17) → `event:trx:payment:channel`.
  */
 export function dedupRef(job: NotifyJob): string {
+  if (job.event === "notification.resend") return job.logId;
   if (job.event === "whatsapp.send") return dedupRef(whatsappSource(job));
   if (job.event === "admin.alert") return `${job.kind}:${job.alert ?? "all"}:${job.ref ?? job.date ?? "-"}`;
   if (job.event === "payment.pending" || job.event === "payment.failed") {
@@ -100,11 +121,15 @@ export const dedupKey = (job: NotifyJob, channel: "email" | "whatsapp"): string 
     ? dedupKey(whatsappSource(job), "whatsapp")
     : `${job.event}:${dedupRef(job)}:${channel}`;
 
+/** dedup_key baris kirim ulang (unik per klik; event asal tidak berubah). */
+export const resendDedupKey = (originalLogId: string, newLogId: string) => `resend:${originalLogId}:${newLogId}`;
+
 /** Dedup id QStash (tanpa ':' agar konsisten dengan id yang sudah dipakai, mis. payment-paid-{trx}). */
 export function qstashDedupId(job: NotifyJob): string {
   if (job.event === "whatsapp.send") {
     return `wa-${job.source}-${dedupRef(job)}`.replace(/[^A-Za-z0-9_-]/g, "-");
   }
+  if (job.event === "notification.resend") return `resend-${job.logId}`;
   if (job.event === "payment.paid") return `payment-paid-${job.transactionId}`;
   if (job.event === "payment.pending") return `payment-pending-${job.paymentId}`;
   if (job.event === "admin.alert" && job.kind === "reconciliation") return `reconcile-alert-${job.date}`;

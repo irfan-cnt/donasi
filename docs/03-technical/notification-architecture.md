@@ -59,7 +59,9 @@ Kegagalan tidak memengaruhi status pembayaran (BR-31). Setelah 3 retry gagal →
 - **payment_url** = `/transaksi/{code}/menunggu` TANPA access token (token hanya tersimpan sebagai hash). Payload log tetap disaring: parameter token di URL → `***`.
 - **Event dipublish**: `payment.pending` (createPayment), `payment.paid` (webhook/expiry/rekonsiliasi + outbox), `payment.failed`/`payment.expired` (webhook & job, hanya bila transaksi ikut terminal), `admin.alert`.
 - **Alert admin via email**: hasil `applyVerifiedStatus` (`amount_mismatch`, `needs_review`, `paid_after_terminal`, `unknown_payment`, `refund_reported`) dari webhook & job (dedup per payment); `provider_auth`, `webhook_unverifiable` (dedup per jam); `provider_404_storm` (per tanggal); rekonsiliasi harian; kuota email. **Belum** dikirim via email (hanya log/audit): `orphan_charge` (createPayment) — tercakup laporan rekonsiliasi harian.
-- Validasi simpan template untuk admin (P23): `validateTemplate()`.
+- Validasi template (P23): `validateTemplate()`/`validateTemplateFields()` saat simpan, aktivasi, kirim tes, dan lagi saat render di handler (`activeTemplate`; template aktif rusak → diperlakukan tidak aktif). Isi email = teks biasa (OD-23).
+- **Alert `template_invalid` (P23):** template aktif tidak valid saat render → `admin.alert` per event+kanal per hari WIB.
+- **Kirim ulang admin (P23):** body job `{event:"notification.resend", logId}` (dedup QStash `resend-{logId}`; WA memakai flow control Fonnte). Baris log baru dibuat server action (`dedup_key = resend:{asal}:{baru}`, `request_payload = {resend_of, forced, payment_id}`), handler menerapkan gate yang sama dengan pengiriman asli. `payment.paid`/`receipt.issued` yang sudah `sent` di-dedup kecuali paksa (OD-24). Kirim tes: baris `is_test = true` tanpa transaksi/dedup_key.
 
 ## Implementasi P17 (10 Nov 2026)
 - Kode: `src/lib/whatsapp/fonnte.ts` (server-only; fetch dapat di-inject, timeout 10 s, tanpa retry internal), `notification-service.ts` (`recordWhatsapp` + `handleWhatsappJob`), `notifications/publish.ts` (`publishWhatsappJob`), skrip manual `scripts/whatsapp-test.ts` (`pnpm wa:test --to <nomor> --yes`, ditolak di production).
