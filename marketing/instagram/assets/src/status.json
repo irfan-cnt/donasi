@@ -1,0 +1,236 @@
+[
+  {
+    "id": "IG-PF-01",
+    "out": "profile/IG-PF-01.png",
+    "size": "1080x1080",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-FD-01",
+    "out": "feed/IG-FD-01.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-FD-02",
+    "out": "feed/IG-FD-02.png",
+    "size": "1080x1350",
+    "status": "perlu data",
+    "note": "Foto dokumentasi asli program + izin (atau ilustrasi berlabel \"Ilustrasi\"), kategori, judul program, nominal terkumpul dan tanggal data dari dashboard admin produksi. Template: buat salinan per program."
+  },
+  {
+    "id": "IG-FD-03",
+    "out": "feed/IG-FD-03.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-FD-04",
+    "out": "feed/IG-FD-04.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-FD-05",
+    "out": "feed/IG-FD-05.png",
+    "size": "1080x1350",
+    "status": "siap unggah",
+    "note": "Sebelum tayang, pastikan setiap kategori di gambar punya minimal satu program terbit (sesuai catatan P31); hapus item kosong di data.js lalu render ulang."
+  },
+  {
+    "id": "IG-CR-01-S1",
+    "out": "carousel/IG-CR-01/IG-CR-01-S1.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-01-S2",
+    "out": "carousel/IG-CR-01/IG-CR-01-S2.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-01-S3",
+    "out": "carousel/IG-CR-01/IG-CR-01-S3.png",
+    "size": "1080x1350",
+    "status": "perlu data",
+    "note": "Daftar metode pembayaran yang aktif di akun Midtrans produksi (mis. QRIS, e-wallet, virtual account)."
+  },
+  {
+    "id": "IG-CR-01-S4",
+    "out": "carousel/IG-CR-01/IG-CR-01-S4.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-01-S5",
+    "out": "carousel/IG-CR-01/IG-CR-01-S5.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-01-S6",
+    "out": "carousel/IG-CR-01/IG-CR-01-S6.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-02-S1",
+    "out": "carousel/IG-CR-02/IG-CR-02-S1.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-02-S2",
+    "out": "carousel/IG-CR-02/IG-CR-02-S2.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-02-S3",
+    "out": "carousel/IG-CR-02/IG-CR-02-S3.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-02-S4",
+    "out": "carousel/IG-CR-02/IG-CR-02-S4.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-02-S5",
+    "out": "carousel/IG-CR-02/IG-CR-02-S5.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-02-S6",
+    "out": "carousel/IG-CR-02/IG-CR-02-S6.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-03-S1",
+    "out": "carousel/IG-CR-03/IG-CR-03-S1.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-03-S2",
+    "out": "carousel/IG-CR-03/IG-CR-03-S2.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-03-S3",
+    "out": "carousel/IG-CR-03/IG-CR-03-S3.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-03-S4",
+    "out": "carousel/IG-CR-03/IG-CR-03-S4.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-03-S5",
+    "out": "carousel/IG-CR-03/IG-CR-03-S5.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-03-S6",
+    "out": "carousel/IG-CR-03/IG-CR-03-S6.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-04-S1",
+    "out": "carousel/IG-CR-04/IG-CR-04-S1.png",
+    "size": "1080x1350",
+    "status": "perlu data",
+    "note": "Seluruh carousel adalah TEMPLATE. Isi hanya dari berita program yang sudah terbit di produksi: URL berita, judul kabar, latar belakang, kegiatan + tanggal + kota/kabupaten, nominal disalurkan + jenis bantuan + tanggal (sama persis dengan rincian penyaluran), kutipan berizin (atau hapus slide 5), status program, foto asli berizin. Ikuti checklist izin di carousel-posts.md."
+  },
+  {
+    "id": "IG-CR-04-S2",
+    "out": "carousel/IG-CR-04/IG-CR-04-S2.png",
+    "size": "1080x1350",
+    "status": "perlu data"
+  },
+  {
+    "id": "IG-CR-04-S3",
+    "out": "carousel/IG-CR-04/IG-CR-04-S3.png",
+    "size": "1080x1350",
+    "status": "perlu data"
+  },
+  {
+    "id": "IG-CR-04-S4",
+    "out": "carousel/IG-CR-04/IG-CR-04-S4.png",
+    "size": "1080x1350",
+    "status": "perlu data"
+  },
+  {
+    "id": "IG-CR-04-S5",
+    "out": "carousel/IG-CR-04/IG-CR-04-S5.png",
+    "size": "1080x1350",
+    "status": "perlu data"
+  },
+  {
+    "id": "IG-CR-04-S6",
+    "out": "carousel/IG-CR-04/IG-CR-04-S6.png",
+    "size": "1080x1350",
+    "status": "perlu data"
+  },
+  {
+    "id": "IG-CR-04-S7",
+    "out": "carousel/IG-CR-04/IG-CR-04-S7.png",
+    "size": "1080x1350",
+    "status": "perlu data"
+  },
+  {
+    "id": "IG-CR-05-S1",
+    "out": "carousel/IG-CR-05/IG-CR-05-S1.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-05-S2",
+    "out": "carousel/IG-CR-05/IG-CR-05-S2.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-05-S3",
+    "out": "carousel/IG-CR-05/IG-CR-05-S3.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-05-S4",
+    "out": "carousel/IG-CR-05/IG-CR-05-S4.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-05-S5",
+    "out": "carousel/IG-CR-05/IG-CR-05-S5.png",
+    "size": "1080x1350",
+    "status": "siap unggah"
+  },
+  {
+    "id": "IG-CR-05-S6",
+    "out": "carousel/IG-CR-05/IG-CR-05-S6.png",
+    "size": "1080x1350",
+    "status": "perlu data",
+    "note": "Domain produksi resmi dan username Instagram terpilih."
+  },
+  {
+    "id": "IG-CR-05-S7",
+    "out": "carousel/IG-CR-05/IG-CR-05-S7.png",
+    "size": "1080x1350",
+    "status": "perlu data",
+    "note": "Kontak resmi lembaga (sama dengan halaman /kontak)."
+  }
+]
