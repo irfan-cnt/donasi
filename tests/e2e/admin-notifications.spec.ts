@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { neon } from "@neondatabase/serverless";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./helpers/fixtures";
 import { ADMIN_COOKIE, cleanupAdmin, seedAdmin, seedAdminSession, type SeededAdmin } from "./helpers/admin-session";
 
 // P23 — admin template & log notifikasi end-to-end (Neon dev). Server WAJIB dijalankan dengan

@@ -33,6 +33,12 @@ describe("donation schema — nominal (AC-04.1, AC-04.2)", () => {
     expect(!r.ok && r.fieldErrors.amount).toMatch(/angka/);
   });
 
+  it("AC-04.2 (skenario 3): nominal negatif / desimal ditolak server, tidak dinormalisasi diam-diam", () => {
+    for (const amount of ["-50000", "50000,5", "50000.5"]) {
+      expect(parseDonationInput({ ...base, amount }, OPEN).ok, amount).toBe(false);
+    }
+  });
+
   it("menolak < min dan > max", () => {
     expect(amountError("9999", OPEN.bounds)).toMatch(/Minimal donasi Rp 10.000/);
     expect(amountError("100000001", OPEN.bounds)).toMatch(/Maksimal donasi Rp 100.000.000/);

@@ -2,7 +2,7 @@ import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { canDeletePermanently, canTransition, publishBlockers, type PublishCheckInput } from "@/lib/campaign-rules";
 import { detectImageType, ImageValidationError, MAX_IMAGE_BYTES, processImageUpload } from "@/lib/images/process-image";
-import { campaignInputSchema, newsInputSchema, slugify } from "@/lib/validation/admin-campaign";
+import { campaignInputSchema, disbursementInputSchema, newsInputSchema, slugify } from "@/lib/validation/admin-campaign";
 import { hasPermission } from "@/lib/admin-auth/permissions";
 import { ROLE_PERMISSIONS } from "../../scripts/seed/reference-data";
 
@@ -150,5 +150,23 @@ describe("upload gambar: magic bytes, ukuran, WebP", () => {
     expect(detectImageType(out.data)).toBe("webp");
     expect(out.width).toBe(1600);
     expect(out.height).toBe(800);
+  });
+});
+
+describe("penyaluran dana (F-33)", () => {
+  const base = {
+    campaignId: "0190d5c6-7a8b-7c3d-8e4f-0123456789ab",
+    kind: "program",
+    description: "Penyaluran uji",
+    disbursedAt: "2026-11-01",
+  };
+  for (const amount of ["0", "-1000", "1500.5", "abc"]) {
+    it(`AC-33.2: nominal ${JSON.stringify(amount)} ditolak server`, () => {
+      expect(disbursementInputSchema.safeParse({ ...base, amount }).success).toBe(false);
+    });
+  }
+  it("AC-33.2: nominal bulat > 0 diterima sebagai bigint", () => {
+    const r = disbursementInputSchema.safeParse({ ...base, amount: "25000" });
+    expect(r.success && r.data.amount).toBe(25_000n);
   });
 });

@@ -12,7 +12,7 @@ Arah: premium, hangat, terpercaya, Islami secara halus. Light theme utama. Imple
 | `--border` | #E5E2D9 | Garis & batas |
 | `--ink` | #17201C | Teks utama |
 | `--ink-soft` | #4A5550 | Teks paragraf |
-| `--ink-faint` | #78827D | Teks keterangan (≥4.5:1 di atas putih untuk ≥14px) |
+| `--ink-faint` | #646E69 | Teks keterangan: 5.28:1 di putih, ≥4.65:1 di `bg`/`muted`/`primary-soft`/`gold-soft` (P26: nilai lama #78827D hanya 3.97:1 → gagal axe `color-contrast`) |
 | `--primary` | #086828 | Hijau logo — CTA, progres, tautan, ring fokus (putih di atasnya 6.95:1) |
 | `--primary-hover` | #085828 | Hover tombol primer (8.62:1) |
 | `--primary-ink` | #053F1E | Latar gelap (hero, footer, sidebar admin), nominal penting |

@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { expect, test, type Page } from "@playwright/test";
+import { randomInt, randomUUID } from "node:crypto";
+import { expect, test, type Page } from "./helpers/fixtures";
 import { cleanupCheckout, getActivePackages, getTransactionAmount } from "./helpers/checkout-data";
 import { SESSION_COOKIE, cleanupDonorSession, seedDonorSession } from "./helpers/donor-session";
 
@@ -52,7 +52,9 @@ test("open: nominal + data → halaman pembayaran (token sah saja)", async ({ pa
   await expect(page.getByTestId("checkout-total")).toHaveText("Rp 75.000");
   await page.getByLabel("Nama lengkap").fill("Donatur Uji E2E");
   await page.getByLabel("Email").fill(newEmail());
-  await page.getByLabel("No. WhatsApp").fill("0812 3456 7890");
+  // P26: nomor unik per run — limit checkout-phone 5/jam (P25, OD-31) dipakai bersama antar-run;
+  // nomor tetap membuat run ke-3 dalam satu jam tertahan rate limit (flake terukur, bukan bug app).
+  await page.getByLabel("No. WhatsApp").fill(`0812 ${String(randomInt(1e8)).padStart(8, "0")}`);
   await page.getByLabel("Doa atau pesan").fill("Semoga berkah");
   await submit(page).click();
 

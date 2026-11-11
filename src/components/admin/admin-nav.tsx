@@ -44,7 +44,7 @@ export function AdminSideNav({ groups, onNavigate }: { groups: AdminNavGroup[]; 
     <nav className="space-y-5" aria-label="Menu admin">
       {groups.map((g) => (
         <div key={g.title}>
-          <p className="px-3 text-[11px] font-semibold tracking-wider text-white/50 uppercase">{g.title}</p>
+          <p className="px-3 text-[11px] font-semibold tracking-wider text-white/70 uppercase">{g.title}</p>
           <ul className="mt-1.5 space-y-0.5">
             {g.items.map(({ href, label, icon }) => {
               const Icon = ICONS[icon];

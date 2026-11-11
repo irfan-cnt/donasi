@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./helpers/fixtures";
 import { getCampaignId, getDonorPii, previewToken } from "./helpers/public-data";
 
 // Data: seed sample di Neon branch `dev` (read-only di spec ini).

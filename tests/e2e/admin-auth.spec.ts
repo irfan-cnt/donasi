@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./helpers/fixtures";
 import { authenticator } from "otplib";
 import {
   ADMIN_COOKIE,

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./helpers/fixtures";
 import { cleanupCheckout, markSeededPaid, sandboxConfigured, seedTransaction } from "./helpers/checkout-data";
 
 // P12 Instruksi / Berhasil / Menunggu + endpoint status. Data: Neon branch `dev` (seed sample,

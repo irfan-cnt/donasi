@@ -21,6 +21,7 @@ import { listActiveAmountOptions } from "@/server/repositories/checkout-reposito
 import {
   addDisbursement,
   AdminForbiddenError,
+  deleteDisbursement,
   changeCampaignStatus,
   deleteCampaign,
   deleteNews,
@@ -335,5 +336,25 @@ describe.skipIf(!ENABLED)("admin campaign (integration)", () => {
     const over = await addDisbursement(actor("finance"), d);
     expect(over.ok).toBe(false);
     expect(!over.ok && over.error).toMatch(/melebihi/);
+  });
+
+  it("AC-33.5: tambah & hapus penyaluran tercatat di audit log dengan before/after", async () => {
+    const c = await create({ featuredImageUrl: image, featuredImageAlt: "Alt" });
+    expect((await changeCampaignStatus(actor("owner"), c.id, "published")).ok).toBe(true);
+    // Terkumpul fiktif khusus campaign uji ini (BR-43 butuh dana terkumpul); baris dihapus di afterAll.
+    await sql`update campaigns set collected_amount = 5000 where id = ${c.id}`;
+    const added = await addDisbursement(actor("finance"), {
+      campaignId: c.id, amount: "1000", kind: "program", description: "Penyaluran uji audit", disbursedAt: "2026-11-01",
+    });
+    expect(added.ok).toBe(true);
+    const id = added.ok ? added.id : "";
+    const [create_] = await sql`select before, after from audit_logs where entity_id = ${id} and action = 'disbursement.create'`;
+    expect(create_?.before).toBeNull();
+    expect(create_?.after).toMatchObject({ campaignId: c.id, amount: "1000", kind: "program" });
+
+    expect((await deleteDisbursement(actor("finance"), id)).ok).toBe(true);
+    const [del] = await sql`select before, after from audit_logs where entity_id = ${id} and action = 'disbursement.delete'`;
+    expect(del?.before).toEqual({ deletedAt: null });
+    expect(del?.after).toMatchObject({ deletedAt: expect.any(String) });
   });
 });

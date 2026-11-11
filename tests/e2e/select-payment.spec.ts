@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./helpers/fixtures";
 import { cleanupCheckout, sandboxConfigured } from "./helpers/checkout-data";
 
 // P11 Select Payment. Data: seed sample di Neon branch `dev` (provider midtrans + bca_va/bni_va/

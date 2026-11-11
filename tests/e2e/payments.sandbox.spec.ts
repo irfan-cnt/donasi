@@ -3,7 +3,7 @@
 // (tanpa SANDBOX_BASE_URL suite dilewati; header bypass Vercel diisi playwright.config.ts dari env).
 // Data: campaign "[UJI SANDBOX]" khusus, donor e2e-sandbox+…@example.test, Neon branch `dev`.
 // Status `paid` hanya terjadi lewat webhook Midtrans asli setelah bayar di Simulator (BR-18).
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "./helpers/fixtures";
 import {
   FIXED_SLUG,
   OPEN_SLUG,

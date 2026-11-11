@@ -16,7 +16,7 @@
   --tk-border: 229 226 217; /* #E5E2D9 */
   --tk-ink: 23 32 28; /* #17201C */
   --tk-ink-soft: 74 85 80; /* #4A5550 */
-  --tk-ink-faint: 120 130 125; /* #78827D */
+  --tk-ink-faint: 100 110 105; /* #646E69 — 5.28:1 di putih, ≥4.65:1 di muted/primary-soft (P26 axe) */
 
   /* Hijau logo. primary dipakai untuk tombol/teks (putih di atasnya 6.95:1). */
   --tk-primary: 8 104 40; /* #086828 hijau logo */
@@ -34,7 +34,7 @@
 
   --tk-success: 22 128 72;
   --tk-success-soft: 226 245 234;
-  --tk-warning: 180 110 10;
+  --tk-warning: 150 90 0; /* #965A00 — 5.08:1 di warning-soft (P26 axe; #B46E0A lama 3.69:1) */
   --tk-warning-soft: 254 243 222;
   --tk-danger: 190 40 50;
   --tk-danger-soft: 253 232 233;

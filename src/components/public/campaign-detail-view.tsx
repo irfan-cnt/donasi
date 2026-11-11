@@ -135,33 +135,35 @@ function FundUsage({ c }: { c: CampaignDetail }) {
           </h2>
           <ChevronDown className="size-5 transition group-open:rotate-180" aria-hidden />
         </summary>
-        <dl className="space-y-2.5 border-t border-border px-5 py-4 text-sm">
-          <div className="flex justify-between gap-3">
-            <dt className="text-ink-soft">Dana terkumpul</dt>
-            <dd className="tabular font-medium">{formatRupiah(c.collectedAmount)}</dd>
-          </div>
-          {rows.map(([label, value]) => (
-            <div key={label} className="flex justify-between gap-3">
-              <dt className="text-ink-soft">{label}</dt>
-              <dd className="tabular font-medium">
-                {value > 0n ? "− " : ""}
-                {formatRupiah(value)}
+        <div className="space-y-2.5 border-t border-border px-5 py-4 text-sm">
+          <dl className="space-y-2.5">
+            <div className="flex justify-between gap-3">
+              <dt className="text-ink-soft">Dana terkumpul</dt>
+              <dd className="tabular font-medium">{formatRupiah(c.collectedAmount)}</dd>
+            </div>
+            {rows.map(([label, value]) => (
+              <div key={label} className="flex justify-between gap-3">
+                <dt className="text-ink-soft">{label}</dt>
+                <dd className="tabular font-medium">
+                  {value > 0n ? "− " : ""}
+                  {formatRupiah(value)}
+                </dd>
+              </div>
+            ))}
+            <div className="flex justify-between gap-3 border-t border-dashed border-border pt-2.5 font-bold">
+              <dt>Dana tersedia</dt>
+              <dd className="tabular text-primary-ink">
+                {formatRupiah(available > 0n ? available : 0n)}
               </dd>
             </div>
-          ))}
-          <div className="flex justify-between gap-3 border-t border-dashed border-border pt-2.5 font-bold">
-            <dt>Dana tersedia</dt>
-            <dd className="tabular text-primary-ink">
-              {formatRupiah(available > 0n ? available : 0n)}
-            </dd>
-          </div>
+          </dl>
           <p className="flex gap-1.5 pt-1 text-xs text-ink-faint">
             <Info className="size-3.5 shrink-0" aria-hidden />
             {d.count === 0
               ? "Belum ada penyaluran tercatat. Rincian diperbarui setiap ada penyaluran."
               : "Diperbarui setiap ada penyaluran. Bukti penyaluran tersedia di kabar terbaru."}
           </p>
-        </dl>
+        </div>
       </details>
     </section>
   );

@@ -210,7 +210,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/admin">["
             {trx.latest.length === 0 ? (
               <p className="p-5 text-sm text-ink-faint">Belum ada transaksi pada periode ini.</p>
             ) : (
-              <div className="mt-4 overflow-x-auto">
+              <div className="mt-4 overflow-x-auto" tabIndex={0} role="region" aria-label="Tabel transaksi terbaru">
                 <table className="w-full min-w-[720px] text-left text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/60 text-xs tracking-wide text-ink-faint uppercase">

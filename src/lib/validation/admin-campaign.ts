@@ -51,7 +51,14 @@ export function slugify(input: string): string {
 
 export const moneySchema = z
   .union([z.string(), z.bigint()])
-  .transform((v) => (typeof v === "bigint" ? v.toString() : v.replace(/[^\d]/g, "")))
+  // Hanya digit, atau digit berpemisah ribuan titik (format id-ID: "1.500.000"), boleh diawali "Rp". Tanda minus,
+  // desimal, dan karakter lain TIDAK dibuang diam-diam ("-1000" ≠ 1000, "1500,5" ≠ 15005): nilai
+  // seperti itu dibiarkan apa adanya sehingga ditolak regex di bawah.
+  .transform((v) => {
+    if (typeof v === "bigint") return v.toString();
+    const t = v.trim().replace(/^Rp\s?/i, "");
+    return /^\d{1,3}(\.\d{3})+$/.test(t) ? t.replace(/\./g, "") : t;
+  })
   .pipe(z.string().regex(/^\d{1,13}$/, "Nominal tidak valid"))
   .transform((v) => BigInt(v))
   .refine((v) => v <= PLATFORM_MAX_AMOUNT, "Nominal melebihi batas platform Rp1.000.000.000");

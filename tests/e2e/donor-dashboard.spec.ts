@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./helpers/fixtures";
 import { cleanupDashboard, DASH_CAMPAIGN, getDonorProfile, plantGuestDonor, seedDashboard } from "./helpers/donor-dashboard-data";
 import { SESSION_COOKIE, cleanupDonorSession, seedDonorSession, type SeededDonorSession } from "./helpers/donor-session";
 
