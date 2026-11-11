@@ -129,3 +129,52 @@
 - **Rasio:** 4:5
 - **Prompt:** Flat illustration of an hourglass in orange #F89808 next to a smartphone with an abstract countdown ring in green #086828 (no digits), cream background, calm not alarming. + blok gaya
 - **Negative:** `NEG-BASE`, red alarm, panic, readable numbers
+
+## Reels (P32)
+
+Semua prompt Reels: **rasio 9:16, 1080×1920**, tambahkan blok gaya bersama, negative `NEG-BASE`. Kosongkan 250 px atas & 340 px bawah dari elemen penting (brand-guidelines §8). Dipakai di `reels-script.md` (IG-RL-01). Untuk generator video, pakai gambar ini sebagai frame awal dengan gerak kamera pelan; tetap tanpa teks/logo hasil AI.
+
+| ID | Dipakai di | Rasio / ukuran |
+|---|---|---|
+| IG-RL-01-S1 … IG-RL-01-S7 | reels-script.md §4 | 9:16 · 1080×1920 |
+| IG-RL-01-CV | reels-script.md §12 (cover) | 9:16 · 1080×1920 |
+
+### IG-RL-01-S1 — Hook: amplop ke kotak
+- **Rasio:** 9:16, 1080×1920
+- **Prompt:** Vertical frame, dark green background #053F1E, a single hand seen from the side gently placing a softly glowing cream envelope into a simple unmarked wooden box at the vertical center, small golden particles beginning to rise from the box, subtle eight-pointed star line pattern at 8% opacity, calm humble mood, empty space in the upper middle for headline. + blok gaya
+- **Negative:** `NEG-BASE`, face, money bills, coins, box with writing
+
+### IG-RL-01-S2 — Perkenalan & kategori
+- **Rasio:** 9:16, 1080×1920
+- **Prompt:** Vertical frame, cream background #FAF9F5, two stylized open hands in deep green #086828 cupping a glowing heart-shaped light in yellow #F8B808 to orange #F89808 gradient at center, five small thin-line icons floating around in a loose circle (open book, heartbeat line, mosque dome, food package box, cloud with rain), soft orange wave below, empty band in the upper third for logo and headline. + blok gaya
+- **Negative:** `NEG-BASE`, realistic skin, dome shape identical to a logo, flags
+
+### IG-RL-01-S3 — Pilih program tanpa akun
+- **Rasio:** 9:16, 1080×1920
+- **Prompt:** Vertical frame, flat illustration of a smartphone held by one hand at lower center, screen showing an abstract program card (image placeholder rectangle, green #086828 progress bar, rounded buttons without text) and a toggle switch turned on in green, a finger tapping a large orange #F89808 button, soft green tint background #E6F4EA, empty upper area for text. + blok gaya
+- **Negative:** `NEG-BASE`, readable UI text, real app screenshots, phone brand logo
+
+### IG-RL-01-S4 — Bayar & status terkonfirmasi
+- **Rasio:** 9:16, 1080×1920
+- **Prompt:** Vertical frame, cream background, three rounded tiles stacked vertically with simple generic icons only (a QR-like square pattern that is not scannable, a wallet, a bank building), beside them a green #086828 progress ring completing into a large check mark, small yellow #F8B808 sparkles, calm and reassuring. + blok gaya
+- **Negative:** `NEG-BASE`, bank logos, e-wallet logos, payment company logos, real scannable QR code, readable numbers
+
+### IG-RL-01-S5 — Kuitansi PDF
+- **Rasio:** 9:16, 1080×1920
+- **Prompt:** Vertical frame, soft cream-gold background #FEF3DC, a blank generic document with grey placeholder lines and a green check stamp #086828 floating gently, a simple envelope icon and a download arrow icon nearby, a sprig of green leaves, empty upper third for text. + blok gaya
+- **Negative:** `NEG-BASE`, readable text on document, official seals, signature, email provider logos
+
+### IG-RL-01-S6 — Rincian penyaluran
+- **Rasio:** 9:16, 1080×1920
+- **Prompt:** Vertical frame, soft green tint background #E6F4EA, a clean list card with four abstract rows each with a small green icon and grey placeholder bars, a small calendar icon, a deep green #086828 magnifying glass passing over the card, orange #F89808 accent dot, tidy and transparent feeling. + blok gaya
+- **Negative:** `NEG-BASE`, readable numbers, charts with currency, spreadsheet software UI
+
+### IG-RL-01-S7 — Penutup
+- **Rasio:** 9:16, 1080×1920
+- **Prompt:** Vertical frame, dark green background #053F1E, small glowing golden particles drifting upward and forming a faint eight-pointed star outline around an empty center area reserved for a logo, calm and hopeful, generous empty space. + blok gaya
+- **Negative:** `NEG-BASE`, objects in the center
+
+### IG-RL-01-CV — Cover Reel
+- **Rasio:** 9:16, 1080×1920
+- **Prompt:** Vertical frame, dark green background #053F1E, a softly glowing cream envelope with a trail of golden light curving upward, subtle eight-pointed star line pattern at 8% opacity near the edges, the central 3:4 area mostly empty for a two-line headline and logo, warm and inviting. + blok gaya
+- **Negative:** `NEG-BASE`, busy center
