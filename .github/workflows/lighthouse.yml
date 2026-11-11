@@ -1,0 +1,70 @@
+name: Lighthouse CI
+
+# P24: Lighthouse mobile (Home, Campaign Detail, Checkout) dengan assert budget
+# (lighthouserc.cjs). Terpisah dari ci.yml: butuh database berisi data publik.
+#
+# Secret (Settings → Secrets and variables → Actions):
+#   LHCI_DATABASE_URL           Neon branch khusus CI/dev (bukan production), pooled
+#   LHCI_DATABASE_URL_UNPOOLED  branch yang sama, unpooled
+# Variable (opsional):
+#   LHCI_CAMPAIGN_SLUG          slug campaign published di branch itu
+#                               (default contoh-renovasi-masjid-desa dari seed sample)
+# Tanpa secret: job gagal dengan pesan jelas (tidak lulus diam-diam). AUTH_SECRET dibuat acak
+# per run; tidak ada Redis/QStash/Midtrans/email/WhatsApp (APP_ENV=development, semua off).
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: lhci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      APP_ENV: development
+      APP_URL: http://localhost:3100
+      AUTH_URL: http://localhost:3100
+      NOTIFICATIONS_ENABLED: "false"
+      WHATSAPP_ENABLED: "false"
+      MIDTRANS_IS_PRODUCTION: "false"
+      DATABASE_URL: ${{ secrets.LHCI_DATABASE_URL }}
+      DATABASE_URL_UNPOOLED: ${{ secrets.LHCI_DATABASE_URL_UNPOOLED }}
+      LHCI_CAMPAIGN_SLUG: ${{ vars.LHCI_CAMPAIGN_SLUG }}
+    steps:
+      - name: Periksa secret
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$DATABASE_URL_UNPOOLED" ]; then
+            echo "::error title=Lighthouse CI::Secret LHCI_DATABASE_URL / LHCI_DATABASE_URL_UNPOOLED belum diset (lihat docs/03-technical/deployment.md). Lighthouse tidak dijalankan."
+            exit 1
+          fi
+      - uses: actions/checkout@v4.2.2
+      - uses: pnpm/action-setup@v4.1.0
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: AUTH_SECRET acak per run
+        run: echo "AUTH_SECRET=$(openssl rand -base64 48)" >> "$GITHUB_ENV"
+      - run: pnpm build
+      - name: Jalankan next start
+        run: |
+          pnpm exec next start -p 3100 > next.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:3100/ && exit 0; sleep 1; done
+          cat next.log; exit 1
+      - name: Lighthouse CI
+        run: pnpm dlx @lhci/cli@0.15.1 autorun --config=./lighthouserc.cjs
+      - if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: lighthouse-reports
+          path: .lighthouseci
+          retention-days: 14

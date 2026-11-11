@@ -39,6 +39,8 @@
 ## 5. Header & browser
 CSP ketat (nonce untuk script), `frame-ancestors 'none'`, HSTS (preload setelah stabil), `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` minimal. Server Actions memeriksa Origin (bawaan Next.js) — `serverActions.allowedOrigins` dibatasi domain sendiri.
 
+> **Status P24 (11 Nov 2026):** header CSP **belum diimplementasikan** (tidak ada di `src/proxy.ts` maupun `next.config.ts`; dijadwalkan P25). Vercel Speed Insights memuat skrip dari `/_vercel/speed-insights/script.js` dan mengirim ke `/_vercel/speed-insights/vitals` — keduanya **same-origin**, sehingga CSP nanti cukup `script-src 'self' 'nonce-…'` dan `connect-src 'self'` (tanpa domain tambahan). P24 menambah header `X-Robots-Tag: noindex, nofollow` untuk `/admin`, `/akun`, `/transaksi`, `/donasi`, `/masuk`, `/api` (production) dan seluruh situs di preview/development (`src/lib/seo.ts`).
+
 ## 6. Rahasia
 - Semua di Vercel Environment Variables (Production & Preview terpisah), `.env*` di `.gitignore`, secret scanning GitHub + gitleaks di CI.
 - Kredensial provider **tidak pernah** disimpan di DB atau dikirim ke admin UI; UI hanya menampilkan status terkonfigurasi.

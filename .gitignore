@@ -24,3 +24,6 @@ next-env.d.ts
 
 # P21: upload gambar adapter lokal (development tanpa BLOB_READ_WRITE_TOKEN)
 /public/uploads/dev/
+
+# Lighthouse CI (P24)
+.lighthouseci/

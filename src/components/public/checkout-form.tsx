@@ -17,7 +17,7 @@ import {
   PRAYER_MAX,
   sanitizeAmountInput,
   type DonationFieldErrors,
-} from "@/lib/validation/donation";
+} from "@/lib/validation/donation-input";
 import { createDonationAction, type DonationFormState } from "@/server/actions/donations";
 
 export interface CheckoutOption {

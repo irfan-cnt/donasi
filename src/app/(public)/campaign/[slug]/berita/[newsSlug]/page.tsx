@@ -8,6 +8,7 @@ import { FundProgress } from "@/components/public/fund-progress";
 import { JsonLd } from "@/components/public/json-ld";
 import { ShareButton } from "@/components/public/share-button";
 import { formatDateJakarta } from "@/lib/format/relative-time";
+import { newsJsonLd } from "@/lib/json-ld";
 import { SITE_NAME, siteUrl } from "@/lib/site";
 import { normalizeSlug } from "@/lib/slug";
 import { getPublicNewsDetail, getRecentNewsParams } from "@/server/queries/public-campaign-detail";
@@ -54,23 +55,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function NewsDetailPage({ params }: Props) {
   const n = await load(params);
   if (!n) notFound();
-  const site = siteUrl();
   const campaignPath = `/campaign/${n.campaign.slug}`;
-  const url = `${site}${campaignPath}/berita/${n.slug}`;
-  const imageUrl = n.imageUrl ?? n.campaign.imageUrl;
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "NewsArticle",
-    headline: n.title.slice(0, 110),
-    description: n.seoDescription ?? n.excerpt ?? undefined,
-    image: [new URL(imageUrl, site).toString()],
-    datePublished: n.publishedAt.toISOString(),
-    dateModified: n.updatedAt.toISOString(),
-    mainEntityOfPage: { "@type": "WebPage", "@id": url },
-    author: { "@type": "Organization", name: SITE_NAME, url: site },
-    publisher: { "@type": "Organization", name: SITE_NAME, url: site },
-    about: { "@type": "WebPage", name: n.campaign.title, url: `${site}${campaignPath}` },
-  };
+  const jsonLd = newsJsonLd({
+    site: siteUrl(),
+    siteName: SITE_NAME,
+    campaignSlug: n.campaign.slug,
+    campaignTitle: n.campaign.title,
+    newsSlug: n.slug,
+    title: n.title,
+    description: n.seoDescription ?? n.excerpt,
+    imageUrl: n.imageUrl ?? n.campaign.imageUrl,
+    publishedAt: n.publishedAt,
+    updatedAt: n.updatedAt,
+  });
   return (
     <article className="mx-auto max-w-3xl px-4 py-6">
       <JsonLd data={jsonLd} />

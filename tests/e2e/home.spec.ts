@@ -84,14 +84,54 @@ test("listing /campaign: H1, canonical, bagian selesai terpisah, empty state", a
   expect(errors).toEqual([]);
 });
 
-test("robots.txt menutup /admin, /akun, /api dan sitemap tersedia", async ({ request }) => {
+test("robots.txt sesuai lingkungan dan sitemap hanya berisi URL publik", async ({ request }) => {
   const robots = await (await request.get("/robots.txt")).text();
-  for (const path of ["/admin", "/akun", "/api"]) expect(robots).toContain(`Disallow: ${path}`);
+  if (/^Disallow: \/$/m.test(robots)) {
+    // Non-production (dev/preview): seluruh situs ditutup + header noindex (P24).
+    const home = await request.get("/");
+    expect(home.headers()["x-robots-tag"]).toContain("noindex");
+  } else {
+    for (const path of ["/admin", "/akun", "/transaksi", "/donasi/*/pembayaran", "/api"]) {
+      expect(robots).toContain(`Disallow: ${path}`);
+    }
+  }
   const sitemap = await request.get("/sitemap.xml");
   expect(sitemap.ok()).toBe(true);
   const xml = await sitemap.text();
   expect(xml).toContain("/campaign/contoh-renovasi-masjid-desa");
+  expect(xml).toMatch(/\/campaign\/[a-z0-9-]+\/berita\/[a-z0-9-]+</);
   expect(xml).not.toContain("contoh-ambulans-gratis-dhuafa");
+  expect(xml).not.toMatch(/pratinjau|token=|\/admin|\/akun|\/donasi\/|\/transaksi/);
+});
+
+test("metadata publik unik + canonical, JSON-LD valid; halaman privat noindex", async ({ page, request }) => {
+  const publicPaths = ["/", "/campaign", "/campaign/contoh-renovasi-masjid-desa"];
+  const titles = new Set<string>();
+  const canonicals = new Set<string>();
+  for (const path of publicPaths) {
+    await page.goto(path);
+    titles.add(await page.title());
+    const canonical = await page.locator('link[rel="canonical"]').getAttribute("href");
+    expect(canonical).toBeTruthy();
+    canonicals.add(canonical!);
+    expect(await page.locator('meta[name="description"]').getAttribute("content")).toBeTruthy();
+    expect(await page.locator('meta[property="og:image"]').first().getAttribute("content")).toBeTruthy();
+    for (const raw of await page.locator('script[type="application/ld+json"]').allTextContents()) {
+      const ld = JSON.parse(raw) as Record<string, unknown>;
+      expect(ld["@context"]).toBe("https://schema.org");
+    }
+  }
+  expect(titles.size).toBe(publicPaths.length);
+  expect(canonicals.size).toBe(publicPaths.length);
+
+  for (const path of ["/masuk", "/donasi/contoh-renovasi-masjid-desa", "/admin/masuk"]) {
+    const res = await request.get(path);
+    expect(res.headers()["x-robots-tag"], path).toContain("noindex");
+    await page.goto(path);
+    expect(await page.locator('meta[name="robots"]').first().getAttribute("content"), path).toContain(
+      "noindex",
+    );
+  }
 });
 
 for (const width of [360, 768, 1280]) {

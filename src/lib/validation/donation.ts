@@ -1,60 +1,27 @@
 import { z } from "zod";
 
-// Validasi checkout donasi (F-04, BR-05–BR-08). Modul murni: dipakai server action (sumber
-// kebenaran) dan form klien (umpan balik inline). Nominal selalu string digit → bigint;
+// Validasi checkout donasi (F-04, BR-05–BR-08) dengan Zod: dipakai server action (sumber
+// kebenaran). Helper tanpa Zod untuk form klien ada di ./donation-input. Nominal selalu string digit → bigint;
 // tidak pernah lewat `Number` agar tidak kehilangan presisi di atas 2^53 (AC-04.2).
 
-export const MAX_AMOUNT_DIGITS = 13;
-export const PRAYER_MAX = 280;
-export const ANONYMOUS_NAME = "Hamba Allah";
-
-/** Hanya digit, tanpa nol di depan, maksimal 13 digit (dipakai input nominal di klien). */
-export function sanitizeAmountInput(raw: string): string {
-  return raw.replace(/\D/g, "").replace(/^0+/, "").slice(0, MAX_AMOUNT_DIGITS);
-}
-
-const thousands = new Intl.NumberFormat("id-ID");
-
-/** "1250000" → "1.250.000" via BigInt (presisi penuh). */
-export function formatAmountDigits(digits: string): string {
-  return /^\d+$/.test(digits) ? thousands.format(BigInt(digits)) : "";
-}
-
-const rupiah = new Intl.NumberFormat("id-ID", {
-  style: "currency",
-  currency: "IDR",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
-const rp = (v: bigint) => rupiah.format(v).replace(/ /g, " ");
-
-export interface AmountBounds {
-  min: bigint;
-  max: bigint;
-}
-
-/** Pesan error nominal open (AC-04.1) atau null bila valid. `digits` = string mentah. */
-export function amountError(digits: string, bounds: AmountBounds): string | null {
-  const v = digits.trim();
-  if (!v) return "Masukkan nominal donasi.";
-  if (!/^\d+$/.test(v)) return "Nominal hanya boleh berisi angka.";
-  if (v.length > MAX_AMOUNT_DIGITS) return `Nominal maksimal ${MAX_AMOUNT_DIGITS} digit.`;
-  const amount = BigInt(v);
-  if (amount < bounds.min) return `Minimal donasi ${rp(bounds.min)}.`;
-  if (amount > bounds.max) return `Maksimal donasi ${rp(bounds.max)} per transaksi.`;
-  return null;
-}
-
-/** Normalisasi nomor WA Indonesia ke E.164 (+62…); null bila tidak valid. */
-export function normalizeIndonesianPhone(raw: string): string | null {
-  const digits = raw.replace(/[\s\-().]/g, "");
-  let rest: string | null = null;
-  if (/^\+62\d+$/.test(digits)) rest = digits.slice(3);
-  else if (/^62\d+$/.test(digits)) rest = digits.slice(2);
-  else if (/^0\d+$/.test(digits)) rest = digits.slice(1);
-  if (!rest || !/^8\d{7,12}$/.test(rest)) return null;
-  return `+62${rest}`;
-}
+export {
+  ANONYMOUS_NAME,
+  MAX_AMOUNT_DIGITS,
+  PRAYER_MAX,
+  amountError,
+  formatAmountDigits,
+  normalizeIndonesianPhone,
+  sanitizeAmountInput,
+  type AmountBounds,
+  type DonationFieldErrors,
+} from "./donation-input";
+import {
+  amountError,
+  normalizeIndonesianPhone,
+  PRAYER_MAX,
+  type AmountBounds,
+  type DonationFieldErrors,
+} from "./donation-input";
 
 const checkbox = z
   .union([z.literal("on"), z.literal("true"), z.literal(""), z.null(), z.undefined()])
@@ -112,7 +79,6 @@ const FORM_KEYS = Object.keys(donationFormSchema.shape) as (keyof typeof donatio
 
 export type DonationForm = z.output<typeof donationFormSchema>;
 
-export type DonationFieldErrors = Partial<Record<"amount" | "optionId" | "name" | "email" | "phone" | "prayer" | "form", string>>;
 
 export interface CampaignAmountRules {
   amountType: "open" | "fixed";

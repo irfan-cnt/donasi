@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, isNotNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { getDb } from "@/lib/db";
 import { campaignCategories, campaignNews, campaigns, transactions } from "@/lib/db/schema";
@@ -171,17 +171,58 @@ export async function getPlatformStats(): Promise<PlatformStats> {
   );
 }
 
-/** Campaign pilihan untuk hero: is_featured terbaru, fallback published terbaru. */
+/** Kunci Redis kartu campaign pilihan (konstanta: tidak bergantung input request). */
+export const FEATURED_CACHE_KEY = "featured:v1";
+/** TTL Redis kartu pilihan (performance.md §3: 60 s). */
+export const FEATURED_CACHE_TTL_S = 60;
+
+type CardJson = Omit<CampaignCardData, "targetAmount" | "collectedAmount"> & {
+  targetAmount: string | null;
+  collectedAmount: string;
+};
+
+/** Codec bigint ↔ string untuk kartu campaign di Redis. */
+export const featuredCodec = {
+  serialize: (v: CampaignCardData | null): CardJson | null =>
+    v && {
+      ...v,
+      targetAmount: v.targetAmount === null ? null : v.targetAmount.toString(),
+      collectedAmount: v.collectedAmount.toString(),
+    },
+  deserialize: (raw: unknown): CampaignCardData | null => {
+    const r = raw as CardJson | null;
+    return (
+      r && {
+        ...r,
+        targetAmount: r.targetAmount === null ? null : BigInt(r.targetAmount),
+        collectedAmount: BigInt(r.collectedAmount),
+      }
+    );
+  },
+};
+
+/**
+ * Campaign pilihan untuk hero: is_featured terbaru, fallback published terbaru. Cache Redis 60 s
+ * (dibagi antar instance) di bawah "use cache"; dihapus saat admin mengubah campaign dan saat
+ * revalidasi `campaigns` setelah pembayaran (ter-throttle).
+ */
 export async function getFeaturedCampaign(): Promise<CampaignCardData | null> {
   "use cache";
   cacheLife(ISR_LIFE);
-  const rows = await baseSelect()
-    .where(eq(campaigns.status, "published"))
-    .orderBy(desc(campaigns.isFeatured), desc(campaigns.publishedAt), desc(campaigns.id))
-    .limit(1);
-  const items = rows.map(toCard);
-  tagCards(items);
-  return items[0] ?? null;
+  const item = await cachedJson(
+    FEATURED_CACHE_KEY,
+    FEATURED_CACHE_TTL_S,
+    async () => {
+      const rows = await baseSelect()
+        .where(eq(campaigns.status, "published"))
+        .orderBy(desc(campaigns.isFeatured), desc(campaigns.publishedAt), desc(campaigns.id))
+        .limit(1);
+      return rows.map(toCard)[0] ?? null;
+    },
+    featuredCodec,
+  );
+  tagCards(item ? [item] : []);
+  return item;
 }
 
 /** "Butuh bantuan segera": published dengan end_at terdekat yang belum lewat. */
@@ -262,4 +303,28 @@ export async function getSitemapCampaigns(): Promise<{ slug: string; updatedAt: 
     .from(campaigns)
     .where(inArray(campaigns.status, ["published", "completed"]))
     .orderBy(desc(campaigns.publishedAt));
+}
+
+/**
+ * Berita published (tidak terhapus) dari campaign yang tampil di sitemap (published/completed).
+ * Draft, berita terhapus, dan campaign draft/paused/archived tidak pernah masuk (P24).
+ */
+export async function getSitemapNews(): Promise<
+  { slug: string; newsSlug: string; updatedAt: Date }[]
+> {
+  "use cache";
+  cacheLife(ISR_LIFE);
+  cacheTag(CAMPAIGNS_TAG);
+  return getDb()
+    .select({ slug: campaigns.slug, newsSlug: campaignNews.slug, updatedAt: campaignNews.updatedAt })
+    .from(campaignNews)
+    .innerJoin(campaigns, eq(campaignNews.campaignId, campaigns.id))
+    .where(
+      and(
+        inArray(campaigns.status, ["published", "completed"]),
+        eq(campaignNews.status, "published"),
+        isNull(campaignNews.deletedAt),
+      ),
+    )
+    .orderBy(desc(campaignNews.publishedAt));
 }

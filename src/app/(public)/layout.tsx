@@ -1,6 +1,7 @@
 import { BottomNav } from "@/components/public/bottom-nav";
 import { Footer } from "@/components/public/footer";
 import { PublicHeader } from "@/components/public/public-header";
+import { PublicSpeedInsights } from "@/components/shared/speed-insights";
 
 export default function PublicLayout({ children }: LayoutProps<"/">) {
   return (
@@ -9,6 +10,7 @@ export default function PublicLayout({ children }: LayoutProps<"/">) {
       <main className="flex-1">{children}</main>
       <Footer />
       <BottomNav />
+      {process.env.VERCEL ? <PublicSpeedInsights /> : null}
     </div>
   );
 }

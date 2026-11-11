@@ -1,14 +1,18 @@
 import "server-only";
 import { revalidateTag } from "next/cache";
 import { logger } from "@/lib/logger";
+import { invalidateCache } from "@/lib/redis/cache";
 import { forgetCampaignExistence } from "@/server/queries/public-route-exists";
-import { CAMPAIGNS_TAG, campaignTag } from "@/server/queries/public-campaigns";
+import { CAMPAIGNS_TAG, FEATURED_CACHE_KEY, campaignTag } from "@/server/queries/public-campaigns";
 
 /**
  * Invalidasi cache publik setelah perubahan admin (P21): tag `campaigns` (listing, beranda,
- * sitemap) + `campaign:{slug}` (detail & berita), kedaluwarsa segera; plus memo 404 proxy.
+ * sitemap) + `campaign:{slug}` (detail & berita), kedaluwarsa segera; plus memo 404 proxy dan
+ * entri Redis kartu campaign pilihan (P24) agar tidak menyajikan ulang data lama.
  */
-export function invalidateCampaignCaches(...slugs: (string | null | undefined)[]): void {
+export async function invalidateCampaignCaches(
+  ...slugs: (string | null | undefined)[]
+): Promise<void> {
   const unique = [...new Set(slugs.filter((s): s is string => !!s))];
   try {
     revalidateTag(CAMPAIGNS_TAG, { expire: 0 });
@@ -18,4 +22,5 @@ export function invalidateCampaignCaches(...slugs: (string | null | undefined)[]
     logger.warn("revalidateTag gagal", { error: String(error) });
   }
   for (const slug of unique) forgetCampaignExistence(slug);
+  await invalidateCache(FEATURED_CACHE_KEY);
 }

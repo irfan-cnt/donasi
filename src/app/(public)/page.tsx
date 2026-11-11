@@ -8,11 +8,13 @@ import { CampaignList } from "@/components/public/campaign-list";
 import { CampaignListSkeleton } from "@/components/public/campaign-list-skeleton";
 import { CategoryChips } from "@/components/public/category-chips";
 import { EmptyState } from "@/components/public/empty-state";
+import { JsonLd } from "@/components/public/json-ld";
 import { FundProgress } from "@/components/public/fund-progress";
 import { buttonVariants } from "@/components/ui/button";
 import { formatRupiah } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import { DEFAULT_OG_IMAGE } from "@/lib/site";
+import { organizationJsonLd } from "@/lib/json-ld";
+import { DEFAULT_OG_IMAGE, SITE_NAME, siteUrl } from "@/lib/site";
 import { parseCategoryParam } from "@/lib/validation/campaign-list";
 import {
   getCampaignPage,
@@ -197,6 +199,7 @@ const STEPS = [
 export default function HomePage({ searchParams }: PageProps<"/">) {
   return (
     <>
+      <JsonLd data={organizationJsonLd(siteUrl(), SITE_NAME)} />
       <Hero />
       <TrustStrip />
       <UrgentRow />

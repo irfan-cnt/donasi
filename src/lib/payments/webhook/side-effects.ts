@@ -7,8 +7,9 @@ import { getEnv } from "@/lib/env";
 import type { Logger } from "@/lib/logger";
 import { publishJob } from "@/lib/qstash";
 import { getRedis } from "@/lib/redis";
+import { invalidateCache } from "@/lib/redis/cache";
 import { siteUrl } from "@/lib/site";
-import { CAMPAIGNS_TAG, campaignTag } from "@/server/queries/public-campaigns";
+import { CAMPAIGNS_TAG, FEATURED_CACHE_KEY, campaignTag } from "@/server/queries/public-campaigns";
 import type { PaidJob } from "./midtrans-webhook";
 
 // Efek samping webhook setelah commit (P13). Kegagalan di sini tidak pernah mengubah status
@@ -65,6 +66,9 @@ export async function revalidateCampaignThrottled(campaignId: string, log: Logge
   if (!row) return;
   for (const tag of [campaignTag(row.slug), CAMPAIGNS_TAG]) {
     if (await acquireThrottle(tag)) {
+      // Kartu pilihan memuat total terkumpul: hapus entri Redis sebelum revalidasi agar render
+      // ulang membaca DB (bukan nilai Redis lama hingga 60 s).
+      if (tag === CAMPAIGNS_TAG) await invalidateCache(FEATURED_CACHE_KEY);
       revalidateTag(tag, "max");
     } else {
       log.debug("revalidateTag di-throttle", { tag });

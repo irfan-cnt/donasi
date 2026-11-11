@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { robotsHeaderRules } from "./src/lib/seo";
 import { blobStoreHost } from "./src/lib/storage/blob-host";
 
 // M1 P21: hanya host store Blob proyek ini (dari BLOB_STORE_ID / token). Wildcard hanya di
@@ -27,6 +28,10 @@ const nextConfig: NextConfig = {
     "/api/donor/transactions/[code]/pdf": ["./src/lib/pdf/fonts/*.ttf", "./src/lib/pdf/brand/*.png"],
     "/api/transactions/[code]/receipt": ["./src/lib/pdf/fonts/*.ttf", "./src/lib/pdf/brand/*.png"],
     "/api/jobs/notify": ["./src/lib/pdf/fonts/*.ttf", "./src/lib/pdf/brand/*.png"],
+  },
+  // X-Robots-Tag: noindex untuk area privat; seluruh situs di luar production (P24).
+  async headers() {
+    return robotsHeaderRules();
   },
   // Gambar campaign/news dari Vercel Blob (OD-12).
   images: { remotePatterns },

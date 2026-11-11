@@ -372,7 +372,7 @@ export async function saveCampaign(
       );
       return row;
     });
-    invalidateCampaignCaches(existing?.slug, saved.slug);
+    await invalidateCampaignCaches(existing?.slug, saved.slug);
     return { ok: true, id: saved.id, slug: saved.slug, ...(warning ? { warning } : {}) };
   } catch (err) {
     const code = pgCode(err);
@@ -430,7 +430,7 @@ export async function changeCampaignStatus(
     const after = { status: to.data, isFeatured: to.data === "archived" ? false : c.isFeatured };
     await audit(tx, actor, `campaign.${to.data === "published" ? "publish" : to.data === "paused" ? "pause" : to.data === "completed" ? "complete" : "archive"}`, "campaign", id, before, after);
   });
-  invalidateCampaignCaches(c.slug);
+  await invalidateCampaignCaches(c.slug);
   return { ok: true, status: to.data };
 }
 
@@ -465,7 +465,7 @@ export async function deleteCampaign(actor: AdminActor, id: string): Promise<Mut
     return true;
   });
   if (!deleted) return { ok: false, error: "Campaign sudah berubah atau punya transaksi — arsipkan saja." };
-  invalidateCampaignCaches(c.slug);
+  await invalidateCampaignCaches(c.slug);
   return { ok: true };
 }
 
@@ -548,7 +548,7 @@ export async function saveNews(
       return saved!;
     });
     const oldSlug = existing && existing.campaignId !== row.campaignId ? (await findCampaignById(existing.campaignId))?.slug : null;
-    invalidateCampaignCaches(campaign.slug, oldSlug);
+    await invalidateCampaignCaches(campaign.slug, oldSlug);
     return { ok: true, id: row.id };
   } catch (err) {
     if (pgCode(err) === "23505") {
@@ -569,7 +569,7 @@ export async function unpublishNews(actor: AdminActor, id: string): Promise<Muta
     await tx.update(campaignNews).set({ status: "draft", publishedAt: null, updatedAt: new Date() }).where(eq(campaignNews.id, id));
     await audit(tx, actor, "news.unpublish", "campaign_news", id, { status: "published" }, { status: "draft" });
   });
-  invalidateCampaignCaches((await findCampaignById(n.campaignId))?.slug);
+  await invalidateCampaignCaches((await findCampaignById(n.campaignId))?.slug);
   return { ok: true };
 }
 
@@ -584,7 +584,7 @@ export async function deleteNews(actor: AdminActor, id: string): Promise<Mutatio
     await tx.update(campaignNews).set({ deletedAt: now, updatedAt: now }).where(and(eq(campaignNews.id, id), isNull(campaignNews.deletedAt)));
     await audit(tx, actor, "news.delete", "campaign_news", id, { deletedAt: null }, { deletedAt: now.toISOString() });
   });
-  invalidateCampaignCaches((await findCampaignById(n.campaignId))?.slug);
+  await invalidateCampaignCaches((await findCampaignById(n.campaignId))?.slug);
   return { ok: true };
 }
 
@@ -631,7 +631,7 @@ export async function addDisbursement(actor: AdminActor, raw: unknown): Promise<
       fieldErrors: { amount: "Melebihi dana terkumpul" },
     };
   }
-  invalidateCampaignCaches(campaign.slug);
+  await invalidateCampaignCaches(campaign.slug);
   return { ok: true, id };
 }
 
@@ -652,6 +652,6 @@ export async function deleteDisbursement(actor: AdminActor, id: string): Promise
       .where(eq(campaignDisbursements.id, id));
     await audit(tx, actor, "disbursement.delete", "campaign_disbursement", id, { deletedAt: null }, { deletedAt: now.toISOString() }, { amount: row.amount.toString() });
   });
-  invalidateCampaignCaches((await findCampaignById(row.campaignId))?.slug);
+  await invalidateCampaignCaches((await findCampaignById(row.campaignId))?.slug);
   return { ok: true };
 }

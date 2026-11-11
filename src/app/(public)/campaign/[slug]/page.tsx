@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CampaignDetailView, donateHref } from "@/components/public/campaign-detail-view";
 import { JsonLd } from "@/components/public/json-ld";
+import { campaignJsonLd } from "@/lib/json-ld";
 import { DEFAULT_OG_IMAGE, SITE_NAME, siteUrl } from "@/lib/site";
 import { normalizeSlug } from "@/lib/slug";
 import { getPublicCampaignDetail } from "@/server/queries/public-campaign-detail";
@@ -46,28 +47,17 @@ export default async function CampaignDetailPage({ params }: PageProps<"/campaig
   const { slug } = await params;
   const c = await load(slug);
   if (!c) notFound();
-  const site = siteUrl();
-  const url = `${site}/campaign/${c.slug}`;
-  const image = c.images[0];
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "WebPage",
-    "@id": url,
-    url,
-    name: c.title,
+  const jsonLd = campaignJsonLd({
+    site: siteUrl(),
+    siteName: SITE_NAME,
+    slug: c.slug,
+    title: c.title,
     description: c.seoDescription ?? c.shortDescription,
-    image: image ? new URL(image.url, site).toString() : undefined,
-    dateModified: c.updatedAt.toISOString(),
-    isPartOf: { "@type": "WebSite", name: SITE_NAME, url: site },
-    potentialAction: {
-      "@type": "DonateAction",
-      name: "Donasi Sekarang",
-      target: `${site}${donateHref(c.slug)}`,
-      recipient: { "@type": "Organization", name: SITE_NAME, url: site },
-      actionStatus:
-        c.status === "published" ? "https://schema.org/PotentialActionStatus" : "https://schema.org/CompletedActionStatus",
-    },
-  };
+    imageUrl: c.images[0]?.url ?? null,
+    updatedAt: c.updatedAt,
+    donateHref: donateHref(c.slug),
+    active: c.status === "published",
+  });
   return (
     <>
       <JsonLd data={jsonLd} />
