@@ -6,11 +6,13 @@ const rate = vi.fn(async () => ({ success: true, remaining: 29, reset: 0 }));
 vi.mock("@/lib/redis", () => ({ rateLimit: () => rate() }));
 vi.mock("@/lib/audit", () => ({ writeAudit: vi.fn(async () => undefined) }));
 vi.mock("@/lib/admin-auth", () => ({
-  requireAdmin: vi.fn(async () => ({ adminId: "019a0000-0000-7000-8000-000000000001", permissions: ["campaigns.write"] })),
+  // P25 (I4): route memakai requireAdminApi (401/403 JSON).
+  requireAdminApi: vi.fn(async () => ({ ok: true, ctx: { adminId: "019a0000-0000-7000-8000-000000000001", permissions: ["campaigns.write"] } })),
   getRequestMeta: vi.fn(async () => ({ ip: null, ua: null })),
 }));
 
 import { POST } from "@/app/api/admin/images/route";
+import { requireAdminApi } from "@/lib/admin-auth";
 import { BodyTooLargeError, readCapped } from "@/lib/http/read-capped";
 import { blobStoreHost } from "@/lib/storage/blob-host";
 import { setImageStorageForTests } from "@/lib/storage/image-storage";
@@ -66,6 +68,15 @@ describe("POST /api/admin/images", () => {
     expect((await POST(new Request(`${ORIGIN}/api/admin/images`, { method: "POST", body: new Uint8Array(data), headers: { ...h, origin: "https://evil.example", host: "evil.example" } }))).status).toBe(403);
     rate.mockResolvedValueOnce({ success: false, remaining: 0, reset: 0 });
     expect((await POST(req(new Uint8Array(data), h))).status).toBe(429);
+  });
+
+  it("P25 I4: tanpa sesi/izin → 401/403 JSON (bukan redirect), sebelum membaca body", async () => {
+    vi.mocked(requireAdminApi).mockResolvedValueOnce({ ok: false, response: Response.json({ error: "x" }, { status: 401 }) });
+    expect((await POST(req("x", { "content-length": "1" }))).status).toBe(401);
+    vi.mocked(requireAdminApi).mockResolvedValueOnce({ ok: false, response: Response.json({ error: "x" }, { status: 403 }) });
+    expect((await POST(req("x", { "content-length": "1" }))).status).toBe(403);
+    expect(vi.mocked(requireAdminApi)).toHaveBeenCalledWith(["campaigns.write", "news.write", "payment_methods.write"]);
+    expect(rate).not.toHaveBeenCalled();
   });
 
   it("PNG valid → 201 WebP", async () => {

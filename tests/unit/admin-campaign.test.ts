@@ -22,8 +22,10 @@ const ready: PublishCheckInput = {
 };
 
 describe("aturan status campaign (BR-01)", () => {
-  it("draft hanya ke published/arsip; archived final", () => {
+  it("draft hanya ke published; arsip hanya dari completed (OD-30); archived final", () => {
     expect(canTransition("draft", "published")).toBe(true);
+    for (const from of ["draft", "published", "paused"] as const) expect(canTransition(from, "archived")).toBe(false);
+    expect(canTransition("completed", "archived")).toBe(true);
     expect(canTransition("draft", "paused")).toBe(false);
     expect(canTransition("published", "paused")).toBe(true);
     expect(canTransition("paused", "published")).toBe(true);

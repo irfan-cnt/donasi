@@ -180,6 +180,19 @@ describe.skipIf(!ENABLED)("dashboard admin (integration)", () => {
     expect(res).toEqual([expect.objectContaining({ type: "donor", subtitle: d1Email })]);
   });
 
+  it("P25 M4: role tanpa donors.export → email dimasking & hanya cocok persis", async () => {
+    expect(perms.admin).toContain("donors.read");
+    expect(perms.admin).not.toContain("donors.export");
+    const prefix = d1Email.slice(0, d1Email.indexOf("@") + 1);
+    expect(await adminSearch(perms.admin!, prefix)).toEqual([]);
+    const res = await adminSearch(perms.admin!, d1Email);
+    expect(res).toHaveLength(1);
+    expect(res[0]!.subtitle).not.toBe(d1Email);
+    expect(res[0]!.subtitle).toContain("*");
+    // finance (donors.export) tetap boleh prefiks.
+    expect((await adminSearch(perms.finance!, prefix)).some((r) => r.subtitle === d1Email)).toBe(true);
+  });
+
   it("pencarian campaign butuh campaigns.read; wildcard LIKE di-escape", async () => {
     expect(await adminSearch([], "beasiswa")).toEqual([]);
     const res = await adminSearch(perms.editor!, "beasiswa");

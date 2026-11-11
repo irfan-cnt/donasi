@@ -57,7 +57,7 @@ async function main() {
       "",
       `  ${password}`,
       "",
-      "Wajib ganti password & aktifkan TOTP saat login pertama.",
+      "Wajib ganti password & aktifkan TOTP (semua role, OD-29) saat login pertama.",
       "",
     ].join("\n"),
   );

@@ -78,6 +78,8 @@ export const campaigns = pgTable(
     check("campaigns_short_description_check", sql`char_length(${t.shortDescription}) <= 200`),
     check("campaigns_target_amount_check", sql`${t.targetAmount} IS NULL OR ${t.targetAmount} > 0`),
     check("campaigns_collected_amount_check", sql`${t.collectedAmount} >= 0`),
+    // P25 (OD-28): refund mengurangi donor_count; tidak pernah negatif.
+    check("campaigns_donor_count_check", sql`${t.donorCount} >= 0`),
     check("campaigns_min_amount_check", sql`${t.minAmount} >= 1000`),
     check(
       "campaigns_max_amount_check",

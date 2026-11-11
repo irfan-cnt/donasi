@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   index,
   inet,
@@ -21,6 +22,8 @@ export const adminUsers = pgTable("admin_users", {
   passwordHash: text("password_hash").notNull(),
   totpSecretEnc: text("totp_secret_enc"),
   totpEnabled: boolean("totp_enabled").notNull().default(false),
+  /** P25 (M3): langkah waktu TOTP terakhir yang diterima (anti-replay). */
+  totpLastStep: bigint("totp_last_step", { mode: "number" }),
   status: adminStatus("status").notNull().default("active"),
   failedLoginCount: integer("failed_login_count").notNull().default(0),
   lockedUntil: tstz("locked_until"),

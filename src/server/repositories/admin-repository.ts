@@ -36,6 +36,29 @@ export async function updateAdmin(
     .where(eq(adminUsers.id, id));
 }
 
+/**
+ * P25 (M3): klaim langkah waktu TOTP secara atomik. false = langkah ini (atau yang lebih baru)
+ * sudah pernah dipakai → replay ditolak.
+ */
+export async function claimTotpStep(id: string, step: number): Promise<boolean> {
+  const rows = await getDb()
+    .update(adminUsers)
+    .set({ totpLastStep: step })
+    .where(and(eq(adminUsers.id, id), sql`(${adminUsers.totpLastStep} IS NULL OR ${adminUsers.totpLastStep} < ${step})`))
+    .returning({ id: adminUsers.id });
+  return rows.length === 1;
+}
+
+/** P25 (L9): naikkan hitungan gagal login secara atomik; kembalikan nilai baru. */
+export async function incrementFailedLogin(id: string): Promise<number> {
+  const rows = await getDb()
+    .update(adminUsers)
+    .set({ failedLoginCount: sql`${adminUsers.failedLoginCount} + 1`, updatedAt: new Date() })
+    .where(eq(adminUsers.id, id))
+    .returning({ n: adminUsers.failedLoginCount });
+  return rows[0]?.n ?? 0;
+}
+
 /** Role & permission admin (BR-40), dari tabel admin_user_roles → role_permissions. */
 export async function loadAdminAccess(
   adminUserId: string,

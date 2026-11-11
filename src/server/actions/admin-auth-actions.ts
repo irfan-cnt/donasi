@@ -121,5 +121,8 @@ export async function confirmTotpAction(_prev: FormState, formData: FormData): P
   if (!parsed.success) return { error: "Masukkan 6 digit kode dari aplikasi autentikator." };
   const result = await confirmTotpSetup(ctx.adminId, parsed.data.code, await getRequestMeta());
   if (!result.ok) return { error: "Kode tidak cocok. Pastikan jam HP sesuai lalu coba lagi." };
+  // P25 (L9): faktor kedua baru aktif → cabut sesi lain lalu rotasi sesi ini.
+  await revokeOtherAdminSessions(ctx.adminId, ctx.sessionId);
+  await startAdminSession(ctx.adminId);
   redirect("/admin");
 }

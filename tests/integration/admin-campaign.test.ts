@@ -185,7 +185,9 @@ describe.skipIf(!ENABLED)("admin campaign (integration)", () => {
     const renamed = await saveCampaign(actor("owner"), res.id, { ...pub, slug: `${res.slug}-baru` });
     expect(!renamed.ok && renamed.fieldErrors?.slug).toMatch(/terkunci/);
 
-    // L2: arsip mencatat isFeatured di audit.
+    // L2: arsip mencatat isFeatured di audit. P25 (OD-30): arsip hanya dari completed.
+    expect((await changeCampaignStatus(actor("owner"), res.id, "archived")).ok).toBe(false);
+    expect((await changeCampaignStatus(actor("owner"), res.id, "completed")).ok).toBe(true);
     expect((await changeCampaignStatus(actor("owner"), res.id, "archived")).ok).toBe(true);
     const [a] = await sql`select before, after from audit_logs where entity_id = ${res.id} and action = 'campaign.archive'`;
     expect(a!.before).toMatchObject({ isFeatured: true });
@@ -267,13 +269,11 @@ describe.skipIf(!ENABLED)("admin campaign (integration)", () => {
     expect(deact.ok).toBe(true);
     expect((await listActiveAmountOptions(res.id, "package")).map((o) => o.label)).toEqual(["Paket B"]);
 
-    // Draft dengan transaksi tidak bisa dihapus permanen → arsip.
+    // Draft dengan transaksi tidak bisa dihapus permanen; arsip juga tidak (OD-30: hanya dari completed).
     const del = await deleteCampaign(actor("owner"), res.id);
     expect(del.ok).toBe(false);
-    expect(!del.ok && del.error).toMatch(/arsip/i);
-    expect((await changeCampaignStatus(actor("owner"), res.id, "archived")).ok).toBe(true);
-    const edit = await saveCampaign(actor("owner"), res.id, input({ slug: res.slug }));
-    expect(edit.ok).toBe(false);
+    expect(!del.ok && del.error).toMatch(/selesaikan lalu arsipkan/i);
+    expect((await changeCampaignStatus(actor("owner"), res.id, "archived")).ok).toBe(false);
   });
 
   it("AC-24.2: open → fixed dengan transaksi pending memberi peringatan", async () => {

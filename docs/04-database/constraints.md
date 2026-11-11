@@ -4,7 +4,8 @@
 | Constraint | Lokasi | Menjamin |
 |---|---|---|
 | `amount BETWEEN 1000 AND 1000000000` | transactions | Batas absolut (BR-08) |
-| `collected_amount >= 0` | campaigns | Tidak negatif |
+| `collected_amount >= 0` | campaigns | Tidak negatif (refund P25 mengurangi; pelanggaran = rollback) |
+| `donor_count >= 0` | campaigns | P25 (migrasi 0003) |
 | `UNIQUE(transaction_id) WHERE status IN ('pending','paid')` | payments | Satu payment aktif (BR-11) |
 | `UNIQUE(provider_id, provider_ref)` | payments | Tidak ada dua record untuk referensi provider yang sama |
 | `UNIQUE(provider_id, provider_event_id)` | payment_events | Webhook diproses sekali |

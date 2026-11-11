@@ -1,0 +1,19 @@
+# P25 (T-48): konfigurasi gitleaks. Memakai aturan bawaan gitleaks; allowlist HANYA untuk nilai
+# fixture palsu yang diketahui, dibatasi pada file + nilai persisnya (bukan seluruh folder).
+# Menambah entri = keputusan keamanan: sertakan alasan & pastikan nilainya bukan kredensial nyata.
+title = "Tebar Kebaikan gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Fixture palsu: token Blob contoh untuk uji parser host (bukan token nyata)"
+condition = "AND"
+paths = ['''^tests/unit/admin-image-upload\.test\.ts$''']
+regexes = ['''^vercel_blob_rw_AbCdEf123456_secret$''']
+
+[[allowlists]]
+description = "Fixture palsu: access token transaksi 43 karakter untuk uji validasi"
+condition = "AND"
+paths = ['''^tests/unit/transaction-pages\.test\.ts$''']
+regexes = ['''^abcDEF0123456789_-abcDEF0123456789_-abcDEF0$''']

@@ -161,9 +161,22 @@ export function paymentInstructionText(
  * (token hanya tersimpan sebagai hash; payment-architecture.md §3c) — donatur yang membuka dari
  * perangkat checkout tetap melihat detail lewat sesi/tautan aslinya.
  */
+/**
+ * P25 (OD-31): nama donatur bebas diketik siapa pun (checkout tamu) → buang URL/domain agar
+ * notifikasi tidak bisa dipakai menyisipkan tautan (klien email/WA menautkan domain otomatis).
+ */
+export function neutraliseDonorName(name: string): string {
+  const cleaned = name
+    .replace(/\b(?:https?:\/\/|www\.)\S*/gi, " ")
+    .replace(/\b[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.[\p{L}]{2,}\b\S*/giu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || "Hamba Allah";
+}
+
 export function buildVars(ctx: NotificationContext, siteUrl: string): TemplateVars {
   return {
-    donor_name: ctx.donorName,
+    donor_name: neutraliseDonorName(ctx.donorName),
     donor_email: ctx.donorEmail,
     donor_phone: ctx.donorPhone ?? "",
     campaign_title: ctx.campaignTitle,
@@ -347,6 +360,8 @@ async function whatsappSkipReason(
   if (!deps.config.enabled) return "NOTIFICATIONS_ENABLED=false";
   if (!deps.config.whatsappEnabled) return "WHATSAPP_ENABLED=false";
   if (!(WHATSAPP_EVENTS as readonly string[]).includes(event)) return "event tanpa notifikasi WhatsApp";
+  // P25 (OD-31): transaksi tamu → WA hanya setelah pembayaran terkonfirmasi.
+  if (!ctx.checkoutAuthenticated && event !== "payment.paid") return "transaksi tamu: WhatsApp hanya setelah paid";
   if (!(await (deps.whatsappSetting ?? findWhatsappEnabledSetting)())) {
     return "pengaturan notifications.whatsapp_enabled=false";
   }

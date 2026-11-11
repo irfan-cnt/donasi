@@ -13,13 +13,12 @@ export const CAMPAIGN_STATUS_LABEL: Record<CampaignStatusCode, string> = {
 
 /**
  * BR-01: draft → published ⇄ paused → completed → archived; archived final.
- * Arsip juga boleh dari draft/published/paused (P21 #3: campaign yang tidak bisa dihapus
- * permanen diarsipkan).
+ * P25 (OD-30): arsip HANYA dari completed (draft dihapus; campaign berjalan diselesaikan dulu).
  */
 export const CAMPAIGN_TRANSITIONS: Record<CampaignStatusCode, readonly CampaignStatusCode[]> = {
-  draft: ["published", "archived"],
-  published: ["paused", "completed", "archived"],
-  paused: ["published", "completed", "archived"],
+  draft: ["published"],
+  published: ["paused", "completed"],
+  paused: ["published", "completed"],
   completed: ["archived"],
   archived: [],
 };

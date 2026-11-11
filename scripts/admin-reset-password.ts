@@ -54,6 +54,7 @@ async function main() {
           mustChangePassword: true,
           totpSecretEnc: null,
           totpEnabled: false,
+          totpLastStep: null,
           failedLoginCount: 0,
           lockedUntil: null,
           updatedAt: sql`now()`,

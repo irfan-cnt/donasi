@@ -37,6 +37,8 @@ export const applyVerifiedStatusInput = z.object({
   providerRef: z.string().min(1).max(200).nullish(),
   /** Provider menandai butuh review manual (Midtrans capture+challenge, refund). */
   needsReview: z.boolean().optional(),
+  /** P25 (OD-28): Midtrans partial_refund — tidak diterapkan, hanya needs_review. */
+  partialRefund: z.boolean().optional(),
 });
 export type ApplyVerifiedStatusInput = z.input<typeof applyVerifiedStatusInput>;
 
@@ -147,7 +149,7 @@ export async function applyVerifiedStatus(
 
   // 1b) Refund hanya boleh diterapkan lewat cek admin (M1: reversal total belum ada).
   //     Dari sumber lain → dicatat sebagai anomali + alert, status tidak berubah.
-  if (input.status === "refunded" && input.source !== "admin_check") {
+  if (input.status === "refunded" && (input.source !== "admin_check" || input.partialRefund)) {
     const alert: PaymentAlert = {
       kind: "refund_reported",
       paymentId: p.id,
@@ -157,7 +159,13 @@ export async function applyVerifiedStatus(
       reportedStatus: input.status,
       source: input.source,
     };
-    await markEvent(tx, input, p, "ignored_transition", "refund butuh review admin");
+    await markEvent(
+      tx,
+      input,
+      p,
+      "ignored_transition",
+      input.partialRefund ? "refund parsial butuh review admin" : "refund butuh review admin",
+    );
     await writeAnomalyAudit(tx, "payment.needs_review", p.id, alert);
     plog.error("payment: refund dilaporkan (needs_review)", { from: p.status });
     return { ...result, outcome: "ignored_transition", alert };
@@ -309,6 +317,33 @@ export async function applyVerifiedStatus(
       };
       await writeAnomalyAudit(tx, "payment.needs_review", p.id, alert);
       result.alert = alert;
+    }
+  } else if (input.status === "refunded") {
+    // P25 (OD-28): refund penuh → total campaign berkurang TEPAT sekali, hanya pada transisi
+    // pertama paid → refunded (baris payment terkunci FOR UPDATE; guard status di WHERE).
+    const reversed = await tx.execute<{ campaign_id: string; amount: string }>(sql`
+      UPDATE transactions SET status = 'refunded', updated_at = now()
+      WHERE id = ${p.transaction_id} AND status = 'paid'
+      RETURNING campaign_id, amount::text AS amount`);
+    const row = reversed.rows[0];
+    if (row) {
+      // CHECK collected_amount >= 0 / donor_count >= 0 → error = rollback (data tidak konsisten).
+      await tx.execute(sql`
+        UPDATE campaigns SET
+          collected_amount = collected_amount - ${row.amount}::bigint,
+          donor_count = donor_count - 1,
+          updated_at = now()
+        WHERE id = ${row.campaign_id}`);
+      await tx.insert(auditLogs).values(
+        buildAuditRow({
+          actor: { type: "system" },
+          action: "campaign.total_reversed",
+          entityType: "campaign",
+          entityId: row.campaign_id,
+          metadata: { transactionId: p.transaction_id, paymentId: p.id, amount: row.amount, source: input.source },
+        }),
+      );
+      Object.assign(result, { campaignId: row.campaign_id, transactionStatus: "refunded" });
     }
   } else if (txStatus) {
     const allowedFrom = (Object.keys(TRANSACTION_TRANSITIONS) as TransactionStatus[]).filter((s) =>

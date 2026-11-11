@@ -11,6 +11,7 @@ import { looksLikePii, maskEmail, maskPhone } from "@/lib/format/mask";
 import { safeError } from "@/lib/jobs/job-route";
 import type { Logger } from "@/lib/logger";
 import { publishJob } from "@/lib/qstash";
+import { getRedis } from "@/lib/redis";
 import { siteUrl } from "@/lib/site";
 import { exportKey, getExportStore, type ExportStore } from "@/lib/storage/export-storage";
 import {
@@ -184,14 +185,40 @@ export interface ExportJobBody {
   exportId: string;
   adminId: string;
   kind: ExportKind;
-  filters: Record<string, unknown>;
+  /**
+   * P25 (L3): TIDAK lagi dikirim lewat QStash (kata kunci bisa berupa email/WA) — disimpan di
+   * server (ExportFilterStore, TTL 2 jam). Hanya dibaca dari body untuk job format lama.
+   */
+  filters?: Record<string, unknown>;
   /** Mask saat antre (terikat di token unduh). Job memasking bila ini true ATAU izin sudah dicabut. */
   masked: boolean;
 }
 
+/** P25 (L3): filter ekspor disimpan di server, dirujuk dengan exportId. */
+export interface ExportFilterStore {
+  save(exportId: string, filters: Record<string, unknown>): Promise<void>;
+  load(exportId: string): Promise<Record<string, unknown> | null>;
+}
+
+export const EXPORT_FILTER_TTL_S = 2 * 3600;
+
+export const redisExportFilterStore: ExportFilterStore = {
+  async save(exportId, filters) {
+    await getRedis().set(`tk:export-filters:${exportId}`, JSON.stringify(filters), { ex: EXPORT_FILTER_TTL_S });
+  },
+  async load(exportId) {
+    const v = await getRedis().get<unknown>(`tk:export-filters:${exportId}`);
+    if (v == null) return null;
+    const obj = typeof v === "string" ? (JSON.parse(v) as unknown) : v;
+    return obj && typeof obj === "object" ? (obj as Record<string, unknown>) : null;
+  },
+};
+
 export interface ExportDeps {
   store: ExportStore | null;
   publish: (body: ExportJobBody) => Promise<void>;
+  /** Default: Redis (Upstash). */
+  filters?: ExportFilterStore;
   now?: () => number;
   /** Ambang stream vs async (default EXPORT_SYNC_LIMIT; test memakai nilai kecil). */
   syncLimit?: number;
@@ -262,7 +289,8 @@ export async function startExport(actor: AdminActor, raw: unknown, deps: ExportD
   }
   const exportId = randomUUID();
   try {
-    await deps.publish({ exportId, adminId: actor.adminId, kind: req.kind, filters: filterMeta(req.filters), masked: mask });
+    await (deps.filters ?? redisExportFilterStore).save(exportId, filterMeta(req.filters));
+    await deps.publish({ exportId, adminId: actor.adminId, kind: req.kind, masked: mask });
   } catch (error) {
     if (error instanceof ExportUnavailableError) {
       return { mode: "error", status: 503, error: "Antrean ekspor belum dikonfigurasi di server ini. Persempit filter agar ≤ 10.000 baris." };
@@ -305,7 +333,7 @@ export async function cleanupExportFiles(
  */
 export async function runExportJob(
   rawBody: unknown,
-  deps: { store: ExportStore | null; log: Logger; now?: () => number },
+  deps: { store: ExportStore | null; log: Logger; now?: () => number; filters?: ExportFilterStore },
 ): Promise<Record<string, unknown>> {
   const body = parseJobBody(rawBody);
   if (!body) return { skipped: "invalid_body" };
@@ -327,7 +355,19 @@ export async function runExportJob(
     await auditDone("export.failed", { reason: "permission_revoked" });
     return { failed: "permission_revoked" };
   }
-  const req = exportRequestSchema.parse({ kind: body.kind, filters: body.filters });
+  // P25 (L3): filter dari penyimpanan server; body.filters hanya untuk job format lama.
+  const stored = await (deps.filters ?? redisExportFilterStore).load(body.exportId);
+  const filters = stored ?? body.filters;
+  if (!filters) {
+    await auditDone("export.failed", { reason: "filters_expired" });
+    return { failed: "filters_expired" };
+  }
+  const parsedReq = exportRequestSchema.safeParse({ kind: body.kind, filters });
+  if (!parsedReq.success) {
+    await auditDone("export.failed", { reason: "invalid_filters" });
+    return { failed: "invalid_filters" };
+  }
+  const req = parsedReq.data;
   const mask = body.masked || !hasPermission(access.permissions, "donors.export");
   const parts: string[] = [];
   const stats = { rows: 0 };
@@ -345,10 +385,14 @@ function parseJobBody(raw: unknown): ExportJobBody | null {
   if (typeof b.exportId !== "string" || !uuid.test(b.exportId)) return null;
   if (typeof b.adminId !== "string" || !uuid.test(b.adminId)) return null;
   if (b.kind !== "transactions" && b.kind !== "donors") return null;
-  const parsed = exportRequestSchema.safeParse({ kind: b.kind, filters: b.filters ?? {} });
-  if (!parsed.success) return null;
+  let filters: Record<string, unknown> | undefined;
+  if (b.filters !== undefined) {
+    const parsed = exportRequestSchema.safeParse({ kind: b.kind, filters: b.filters });
+    if (!parsed.success) return null;
+    filters = b.filters as Record<string, unknown>;
+  }
   // Body tanpa `masked` (format lama) diperlakukan sebagai masked (fail-closed).
-  return { exportId: b.exportId, adminId: b.adminId, kind: b.kind, filters: (b.filters ?? {}) as Record<string, unknown>, masked: b.masked !== false };
+  return { exportId: b.exportId, adminId: b.adminId, kind: b.kind, filters, masked: b.masked !== false };
 }
 
 /** Status berkas async untuk admin pemiliknya: ready / failed / processing. */

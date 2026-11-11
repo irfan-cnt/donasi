@@ -67,7 +67,7 @@ export function ConnectionTestButton() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const TEXT: Record<string, [boolean, string]> = {
     ok: [true, "Koneksi berhasil: kredensial diterima Midtrans."],
-    invalid_credentials: [false, "Kredensial ditolak Midtrans (401). Periksa MIDTRANS_SERVER_KEY di environment."],
+    invalid_credentials: [false, "Kredensial ditolak Midtrans (401). Periksa server key Midtrans di environment server."],
     unconfigured: [false, "Kredensial Midtrans belum diisi di environment server."],
     rate_limited: [false, "Terlalu sering. Coba lagi dalam beberapa menit."],
     error: [false, "Midtrans tidak dapat dihubungi. Coba lagi nanti."],

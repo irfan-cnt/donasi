@@ -2,6 +2,7 @@ import "server-only";
 import { getEnv } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { getRedis } from "@/lib/redis";
+import { safeError } from "@/lib/safe-error";
 
 /**
  * Cache JSON di Redis (ADR-02: Redis hanya cache, Postgres sumber kebenaran).
@@ -26,13 +27,13 @@ export async function cachedJson<T>(
     const hit = await redis.get<unknown>(fullKey);
     if (hit !== null && hit !== undefined) return codec.deserialize(hit);
   } catch (error) {
-    logger.warn("redis cache get gagal; fail-open", { key, error: String(error) });
+    logger.warn("redis cache get gagal; fail-open", { key, error: safeError(error) });
   }
   const value = await loader();
   try {
     await redis.set(fullKey, codec.serialize(value), { ex: ttlSeconds });
   } catch (error) {
-    logger.warn("redis cache set gagal; fail-open", { key, error: String(error) });
+    logger.warn("redis cache set gagal; fail-open", { key, error: safeError(error) });
   }
   return value;
 }
@@ -44,6 +45,6 @@ export async function invalidateCache(key: string): Promise<void> {
   try {
     await getRedis().del(`tk:cache:${key}`);
   } catch (error) {
-    logger.warn("redis cache del gagal", { key, error: String(error) });
+    logger.warn("redis cache del gagal", { key, error: safeError(error) });
   }
 }

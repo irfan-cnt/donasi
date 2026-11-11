@@ -626,7 +626,7 @@ export function CampaignEditor(props: CampaignEditorProps) {
 
           {campaignId && canWrite && status !== "archived" ? (
             <Panel title="Zona berbahaya">
-              {canPublish ? (
+              {canPublish && status === "completed" ? (
                 <Button
                   type="button"
                   variant="outline"
@@ -645,7 +645,7 @@ export function CampaignEditor(props: CampaignEditorProps) {
               {!props.canDelete ? (
                 <p className="mt-1 flex items-start gap-1.5 text-xs text-ink-faint">
                   <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                  Campaign ini tidak bisa dihapus permanen; arsipkan saja.
+                  Campaign ini tidak bisa dihapus permanen. Arsip hanya untuk campaign yang sudah selesai.
                 </p>
               ) : null}
             </Panel>

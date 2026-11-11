@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { buildAuditRow } from "@/lib/audit/audit-row";
 import { getDb, getTxDb } from "@/lib/db";
-import { auditLogs, donors, transactions, users } from "@/lib/db/schema";
+import { auditLogs, donors, notificationLogs, transactions, users } from "@/lib/db/schema";
 
 export type DonorRow = typeof donors.$inferSelect;
 
@@ -148,10 +148,21 @@ export async function anonymizeDonorAccount(args: {
         donorEmailSnapshot: sql`'deleted+' || ${transactions.id}::text || '@invalid'`,
         donorPhoneSnapshot: null,
         whatsappOptIn: false,
+        // P25 (L7): metadata perangkat bukan data audit keuangan → dihapus (security.md §7).
+        ipHash: null,
+        userAgent: null,
         updatedAt: sql`now()`,
       })
       .where(eq(transactions.donorId, args.donorId))
       .returning({ id: transactions.id });
+    // P25 (L7): log notifikasi transaksi donor ini memuat email/WA & isi pesan → disamarkan.
+    // Status/event/waktu tetap (jejak operasional). Doa (prayer) TIDAK disentuh (OD-33, menunggu PM).
+    if (trx.length) {
+      await tx
+        .update(notificationLogs)
+        .set({ recipient: "dihapus@invalid", requestPayload: null, providerResponse: null, errorMessage: null })
+        .where(inArray(notificationLogs.transactionId, trx.map((t) => t.id)));
+    }
     // Cabut access token transaksi yang masih terbuka (payment tetap hidup; webhook tetap bisa
     // menandai paid). Kolom NOT NULL → hash acak + kedaluwarsa sekarang.
     await tx

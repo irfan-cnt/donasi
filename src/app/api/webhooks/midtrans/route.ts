@@ -1,4 +1,3 @@
-import { isIP } from "node:net";
 import { NextResponse, type NextRequest } from "next/server";
 import { requestLogger } from "@/lib/logger";
 import { getProvider } from "@/lib/payments/registry";
@@ -12,6 +11,8 @@ import {
   revalidateCampaignThrottled,
 } from "@/lib/payments/webhook/side-effects";
 import { publishNotification } from "@/server/services/notifications/publish";
+import { safeError } from "@/lib/safe-error";
+import { clientIp as ipFromHeaders } from "@/lib/http/client-ip";
 
 // HTTP Notification Midtrans (P13, F-17). Kode respons: payment-architecture.md §5b.
 // Jangan pernah me-log body/header (signature_key, PII).
@@ -25,11 +26,9 @@ const reply = (status: number, result: string) =>
 /** Signature ditolak per IP: 20/menit, lalu 429 (Midtrans asli tidak pernah ditolak). */
 const REJECT_RATE = { limit: 20, window: "1 m" } as const;
 
+/** P25 (I1): turunan IP terpusat (src/lib/http/client-ip.ts). */
 function clientIp(request: NextRequest): string {
-  const forwarded =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip");
-  return forwarded && isIP(forwarded) ? forwarded : "unknown";
+  return ipFromHeaders(request.headers) ?? "unknown";
 }
 
 /** Baca body dengan batas byte (tidak mempercayai Content-Length saja). */
@@ -86,7 +85,7 @@ export async function POST(request: NextRequest) {
             );
             return !rl.success;
           } catch (error) {
-            log.warn("rate limit webhook tidak tersedia; fail-open", { error: String(error) });
+            log.warn("rate limit webhook tidak tersedia; fail-open", { error: safeError(error) });
             return false;
           }
         },

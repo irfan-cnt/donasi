@@ -54,12 +54,9 @@ const json = (status: number, body: Record<string, unknown>) =>
   Response.json(body, { status, headers: HEADERS });
 
 /** L3: hanya nama kelas + kode error (mis. SQLSTATE / kode Midtrans), tanpa pesan mentah. */
-export function safeError(e: unknown): string {
-  const name = e instanceof Error ? e.name : "unknown";
-  const code =
-    e && typeof e === "object" && "code" in e && typeof e.code === "string" ? `:${e.code}` : "";
-  return `${name}${code}`;
-}
+import { safeError } from "@/lib/safe-error";
+
+export { safeError };
 
 const defaultLock: JobLock = { acquire: acquireLock, release: releaseLock };
 

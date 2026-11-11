@@ -1,5 +1,4 @@
 import "server-only";
-import { isIP } from "node:net";
 import { cookies, headers } from "next/headers";
 import { forbidden, redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -16,6 +15,7 @@ import {
 } from "@/server/repositories/admin-repository";
 import { hasPermission, type Permission } from "./permissions";
 import { ADMIN_ABSOLUTE_TIMEOUT_MS, ADMIN_TOUCH_INTERVAL_MS, checkSession } from "./session-policy";
+import { clientIp } from "@/lib/http/client-ip";
 
 export const ADMIN_LOGIN_PATH = "/admin/masuk";
 export const ADMIN_CHANGE_PASSWORD_PATH = "/admin/ganti-password";
@@ -35,8 +35,7 @@ export const ADMIN_COOKIE_NAMES = ["__Host-tk_admin", "tk_admin"] as const;
 
 export async function getRequestMeta(): Promise<{ ip: string | null; ua: string | null }> {
   const h = await headers();
-  const forwarded = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? h.get("x-real-ip");
-  const ip = forwarded && isIP(forwarded) ? forwarded : null;
+  const ip = clientIp(h); // P25 (I1)
   return { ip, ua: h.get("user-agent")?.slice(0, 512) ?? null };
 }
 
@@ -101,7 +100,7 @@ export const getAdminContext = cache(async (): Promise<AdminContext | null> => {
   const access = await loadAdminAccess(admin.id);
   const pendingStep = admin.mustChangePassword
     ? "change-password"
-    : access.roles.includes("owner") && !admin.totpEnabled
+    : !admin.totpEnabled // P25 (OD-29): TOTP wajib semua role
       ? "totp-setup"
       : null;
   return {
@@ -151,7 +150,8 @@ export async function requireAdmin(
  * 403 tanpa permission — bukan redirect/forbidden() (yang di route stream 200/307).
  */
 export async function requireAdminApi(
-  permission: Permission,
+  /** Satu permission, atau daftar = cukup salah satu (P25: upload gambar). */
+  permission: Permission | readonly Permission[],
 ): Promise<{ ok: true; ctx: AdminContext } | { ok: false; response: Response }> {
   await connection();
   const deny = (status: 401 | 403, error: string) => ({
@@ -160,6 +160,7 @@ export async function requireAdminApi(
   });
   const ctx = await getAdminContext();
   if (!ctx || ctx.pendingStep) return deny(401, "Sesi admin tidak valid. Silakan masuk kembali.");
-  if (!hasPermission(ctx.permissions, permission)) return deny(403, "Anda tidak punya izin untuk aksi ini.");
+  const anyOf: readonly Permission[] = typeof permission === "string" ? [permission] : permission;
+  if (!anyOf.some((p) => hasPermission(ctx.permissions, p))) return deny(403, "Anda tidak punya izin untuk aksi ini.");
   return { ok: true, ctx };
 }

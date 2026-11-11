@@ -1,5 +1,6 @@
 import "server-only";
 import { hasPermission } from "@/lib/admin-auth/permissions";
+import { maskEmail } from "@/lib/format/mask";
 import { classifyAdminSearch, previousRange, type DashboardRange } from "@/lib/validation/admin-dashboard";
 import {
   getCampaignCounts,
@@ -79,11 +80,14 @@ export async function adminSearch(permissions: string[], q: string): Promise<Adm
   }
   if (kind === "email") {
     if (!hasPermission(permissions, "donors.read")) return [];
-    const list = await searchDonorsByEmail(q);
+    // P25 (M4): konsisten dengan P22 — tanpa donors.export email dimasking dan hanya nilai
+    // lengkap yang dicocokkan (mencegah enumerasi prefiks a@, b@, …).
+    const fullPii = hasPermission(permissions, "donors.export");
+    const list = await searchDonorsByEmail(q, { exact: !fullPii });
     return list.map((d) => ({
       type: "donor",
       title: d.name,
-      subtitle: d.email,
+      subtitle: fullPii ? d.email : maskEmail(d.email),
       href: `/admin/donatur?id=${d.id}`,
     }));
   }

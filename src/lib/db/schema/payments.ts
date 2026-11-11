@@ -131,6 +131,8 @@ export const transactions = pgTable(
     isAnonymous: boolean("is_anonymous").notNull().default(false),
     prayer: text("prayer"),
     whatsappOptIn: boolean("whatsapp_opt_in").notNull().default(false),
+    /** P25 (OD-31): dibuat dengan sesi donatur login; false = tamu (WA hanya setelah paid). */
+    checkoutAuthenticated: boolean("checkout_authenticated").notNull().default(false),
     paidAt: tstz("paid_at"),
     receiptNo: text("receipt_no").unique(),
     receiptIssuedAt: tstz("receipt_issued_at"),

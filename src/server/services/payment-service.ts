@@ -6,7 +6,7 @@ import { groupMethods, type AvailableMethod, type MethodGroup } from "@/lib/paym
 import { getProvider, isProviderConfigured } from "@/lib/payments/registry";
 import type { PaymentProvider, ProviderCode } from "@/lib/payments/types";
 import { publishJob } from "@/lib/qstash";
-import { acquireLock, releaseLock } from "@/lib/redis";
+import { acquireLock, rateLimit, releaseLock } from "@/lib/redis";
 import { cachedJson, invalidateCache } from "@/lib/redis/cache";
 import { sha256 } from "@/lib/security/crypto";
 import { siteUrl } from "@/lib/site";
@@ -122,6 +122,7 @@ export type CreatePaymentReason =
   | "not_payable"
   | "method_unavailable"
   | "in_progress"
+  | "rate_limited"
   | "provider_error"
   | "error";
 
@@ -135,7 +136,15 @@ export interface CreatePaymentDeps {
   releaseLock: (name: string, owner: string) => Promise<void>;
   enqueuePaymentPending: (job: PaymentPendingJob, log: Logger) => Promise<void>;
   now: () => Date;
+  /** P25 (L6): default limiter Upstash. */
+  rateLimit?: typeof rateLimit;
 }
+
+/** P25 (L6): buat/ganti metode = charge Midtrans baru → dibatasi per transaksi & per IP. */
+export const CREATE_PAYMENT_LIMITS = {
+  perTransaction: { limit: 10, window: "1 h" },
+  perIp: { limit: 30, window: "1 h" },
+} as const;
 
 export interface PaymentPendingJob {
   event: "payment.pending";
@@ -188,6 +197,7 @@ const MSG = {
   methodUnavailable: "Metode pembayaran ini sedang tidak tersedia. Silakan pilih metode lain.",
   inProgress: "Pembayaran sedang diproses. Mohon tunggu beberapa detik lalu coba lagi.",
   busy: "Layanan sedang sibuk. Silakan coba lagi beberapa saat lagi.",
+  tooMany: "Terlalu sering mengganti metode pembayaran. Silakan coba lagi nanti.",
   generic: "Pembayaran belum dapat dibuat karena gangguan sistem. Silakan coba lagi.",
 } as const;
 
@@ -240,6 +250,7 @@ export async function createPaymentForTransaction(
   raw: Record<string, unknown>,
   log: Logger,
   deps: CreatePaymentDeps = defaultDeps,
+  ip: string | null = null,
 ): Promise<CreatePaymentResult> {
   const parsed = createPaymentInput.safeParse(raw);
   if (!parsed.success) return fail("invalid", MSG.invalid, false);
@@ -257,6 +268,24 @@ export async function createPaymentForTransaction(
   }
 
   const plog = log.child({ transactionId: trx.id, method: method.code });
+  // P25 (L6): rate limit SEBELUM charge. Fail-closed di preview/production (sama dengan lock):
+  // tanpa Redis tidak ada charge baru — transaksi tetap bisa dibayar dengan instruksi yang ada.
+  const limiter = deps.rateLimit ?? rateLimit;
+  try {
+    const { perTransaction: pt, perIp: pi } = CREATE_PAYMENT_LIMITS;
+    const trxOk = (await limiter("create-payment-trx", trx.id, pt.limit, pt.window)).success;
+    const ipOk = !trxOk || !ip ? true : (await limiter("create-payment-ip", ip, pi.limit, pi.window)).success;
+    if (!trxOk || !ipOk) {
+      plog.warn("create payment rate limit terlampaui", { by: trxOk ? "ip" : "transaction" });
+      return fail("rate_limited", MSG.tooMany);
+    }
+  } catch (error) {
+    if (getEnv().APP_ENV !== "development") {
+      plog.error("rate limit create payment tidak tersedia; fail-closed", { error: errorCode(error) });
+      return fail("in_progress", MSG.busy);
+    }
+    plog.warn("rate limit create payment tidak tersedia (development); lanjut", { error: errorCode(error) });
+  }
   const lockName = `payment:${trx.id}`;
   let owner: string | null;
   try {

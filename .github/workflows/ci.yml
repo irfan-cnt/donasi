@@ -26,7 +26,11 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # P25: dependensi produksi tanpa advisory high/critical.
+      - run: pnpm audit --prod --audit-level high
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
+      # P25 (T-48): nama & nilai secret tidak boleh ada di output klien (.next/static, prerender).
+      - run: pnpm check:bundle-secrets

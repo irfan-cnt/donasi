@@ -7,6 +7,7 @@ import { getOptionalDonor } from "@/lib/auth";
 import { requestLogger } from "@/lib/logger";
 import type { DonationFieldErrors } from "@/lib/validation/donation";
 import { createDonation } from "@/server/services/donation-service";
+import { safeError } from "@/lib/safe-error";
 
 export interface DonationFormState {
   fieldErrors?: DonationFieldErrors;
@@ -66,7 +67,7 @@ export async function createDonationAction(
     const qs = new URLSearchParams({ trx: result.code, t: result.accessToken });
     target = `/donasi/${result.slug}/pembayaran?${qs.toString()}`;
   } catch (error) {
-    log.error("createDonation gagal", { error: String(error) });
+    log.error("createDonation gagal", { error: safeError(error) });
     return {
       status: 500,
       error: "Donasi belum dapat diproses karena gangguan sistem. Silakan coba lagi.",

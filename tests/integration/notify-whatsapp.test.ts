@@ -97,16 +97,16 @@ describe.skipIf(!ENABLED)("notify WhatsApp P17 (integration, Fonnte dimock)", ()
   const code = () =>
     `TK-000000-${randomBytes(3).toString("hex").toUpperCase().replace(/[ILOU]/g, "A").padEnd(6, "A").slice(0, 6)}`;
 
-  async function newTx(opts: { status?: string; optIn?: boolean; phone?: string | null } = {}) {
+  async function newTx(opts: { status?: string; optIn?: boolean; phone?: string | null; guest?: boolean } = {}) {
     const id = newId();
     const phone = opts.phone === undefined ? "+6281234567890" : opts.phone;
     await sql`insert into transactions (id, code, access_token_hash, access_token_expires_at, campaign_id, donor_id,
         amount, status, campaign_title_snapshot, donor_name_snapshot, donor_email_snapshot, donor_phone_snapshot,
-        whatsapp_opt_in, paid_at)
+        whatsapp_opt_in, paid_at, checkout_authenticated)
       values (${id}, ${code()}, ${randomBytes(32)}, now() + interval '1 day', ${campaignId}, ${donorId},
         ${AMOUNT.toString()}, ${opts.status ?? "pending"}, 'Campaign uji WA', 'Uji WA',
         ${`it-wa+${donorId}@example.test`}, ${phone}, ${opts.optIn ?? true},
-        ${opts.status === "paid" ? new Date() : null})`;
+        ${opts.status === "paid" ? new Date() : null}, ${!(opts.guest ?? false)})`;
     txIds.push(id);
     return id;
   }
@@ -208,6 +208,24 @@ describe.skipIf(!ENABLED)("notify WhatsApp P17 (integration, Fonnte dimock)", ()
     expect(msg).toMatch(/https:\/\/tebar\.example\/transaksi\/TK-[^/\s]+\/menunggu$/);
     expect(msg).not.toMatch(/[?&]t=/);
     expect((await waRow(tx))!.dedup_key).toBe(`payment.pending:${tx}:${pay}:whatsapp`);
+  });
+
+  it("P25 OD-31: transaksi tamu → pending/failed tanpa WA (skipped); paid tetap WA", async () => {
+    const tx = await newTx({ guest: true });
+    const pay = await newPay(tx, "pending");
+    const before = calls.length;
+    const r = await post({ event: "payment.pending", transactionId: tx, paymentId: pay });
+    expect(r.status).toBe(200);
+    expect(publishWhatsapp).not.toHaveBeenCalled();
+    expect(calls.length).toBe(before);
+    const row = await waRow(tx);
+    expect(row!.status).toBe("skipped");
+    expect(row!.error_message).toMatch(/tamu/);
+
+    const paidTx = await newTx({ status: "paid", guest: true });
+    const paidPay = await newPay(paidTx, "paid");
+    const { job } = await runPaid(paidTx, paidPay);
+    expect((await post(job)).json).toMatchObject({ whatsapp: "sent" });
   });
 
   it("dedup: job whatsapp.send ganda → satu pesan; job asal ulang tidak publish lagi setelah sent", async () => {

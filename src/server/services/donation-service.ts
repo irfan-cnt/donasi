@@ -25,6 +25,7 @@ import {
   type AmountOptionRow,
   type CheckoutCampaignRow,
 } from "@/server/repositories/checkout-repository";
+import { safeError } from "@/lib/safe-error";
 
 /** BR-08: batas absolut platform (juga CHECK transactions_amount_check). */
 export const PLATFORM_HARD_MAX: Rupiah = 1_000_000_000n;
@@ -33,6 +34,8 @@ export const DEFAULT_CAMPAIGN_MAX: Rupiah = 100_000_000n;
 const ACCESS_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // security.md §2: 7 hari
 const RATE_LIMIT_IP = { limit: 10, window: "1 h" } as const;
 const RATE_LIMIT_EMAIL = { limit: 5, window: "1 h" } as const;
+/** P25 (OD-31): batas per nomor WA — mencegah checkout dipakai mengirim WA ke nomor korban. */
+const RATE_LIMIT_PHONE = { limit: 5, window: "1 h" } as const;
 
 /** BR-03: published AND (start_at NULL/≤ now) AND (end_at NULL/> now). */
 export function acceptsDonations(
@@ -64,7 +67,7 @@ async function platformMaxAmount(log?: Logger): Promise<Rupiah> {
       if (v > 0n && v <= PLATFORM_HARD_MAX) return v;
     }
   } catch (error) {
-    log?.warn("platform.max_amount tidak terbaca; pakai default", { error: String(error) });
+    log?.warn("platform.max_amount tidak terbaca; pakai default", { error: safeError(error) });
   }
   return PLATFORM_HARD_MAX;
 }
@@ -142,7 +145,7 @@ async function withinRateLimit(name: string, id: string, policy: { limit: number
     const r = await rateLimit(name, id, policy.limit, policy.window);
     return r.success;
   } catch (error) {
-    log.error("rate limit tidak tersedia; fail-open (OD-15)", { policy: name, error: String(error) });
+    log.error("rate limit tidak tersedia; fail-open (OD-15)", { policy: name, error: safeError(error) });
     return true;
   }
 }
@@ -207,8 +210,10 @@ export async function createDonation(
   const email = data.email;
   const ipOk = ctx.ip ? await withinRateLimit("checkout-ip", ctx.ip, RATE_LIMIT_IP, ctx.log) : true;
   const emailOk = ipOk && (await withinRateLimit("checkout-email", email, RATE_LIMIT_EMAIL, ctx.log));
-  if (!ipOk || !emailOk) {
-    ctx.log.warn("checkout rate limit terlampaui", { by: ipOk ? "email" : "ip" });
+  const phoneOk =
+    !emailOk || !data.phoneE164 ? true : await withinRateLimit("checkout-phone", data.phoneE164, RATE_LIMIT_PHONE, ctx.log);
+  if (!ipOk || !emailOk || !phoneOk) {
+    ctx.log.warn("checkout rate limit terlampaui", { by: !ipOk ? "ip" : !emailOk ? "email" : "phone" });
     return fail(429, "rate_limited", {
       form: "Terlalu banyak percobaan donasi. Silakan coba lagi dalam beberapa saat.",
     });
@@ -240,6 +245,8 @@ export async function createDonation(
     isAnonymous: data.anonymous,
     prayer: data.prayer || null,
     whatsappOptIn: data.waConsent,
+    // P25 (OD-31): tamu (tanpa sesi) → WA hanya setelah paid.
+    checkoutAuthenticated: !!sessionDonor,
     ipHash: ctx.ip ? hashIp(ctx.ip) : null,
     userAgent: ctx.userAgent?.slice(0, 512) ?? null,
   };
@@ -252,7 +259,7 @@ export async function createDonation(
       return { ok: true, slug: campaign.slug, code: row.code, accessToken, transactionId: row.id };
     } catch (error) {
       if (isUniqueViolation(error, "code")) continue; // tabrakan kode → coba kode baru
-      ctx.log.error("insert transaksi gagal", { error: String(error) });
+      ctx.log.error("insert transaksi gagal", { error: safeError(error) });
       return fail(500, "error");
     }
   }

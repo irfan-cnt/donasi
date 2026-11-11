@@ -4,6 +4,7 @@ import { logger } from "@/lib/logger";
 import { invalidateCache } from "@/lib/redis/cache";
 import { forgetCampaignExistence } from "@/server/queries/public-route-exists";
 import { CAMPAIGNS_TAG, FEATURED_CACHE_KEY, campaignTag } from "@/server/queries/public-campaigns";
+import { safeError } from "@/lib/safe-error";
 
 /**
  * Invalidasi cache publik setelah perubahan admin (P21): tag `campaigns` (listing, beranda,
@@ -19,7 +20,7 @@ export async function invalidateCampaignCaches(
     for (const slug of unique) revalidateTag(campaignTag(slug), { expire: 0 });
   } catch (error) {
     // Di luar konteks request Next (skrip) revalidateTag tidak tersedia; cache ISR 60 s jadi cadangan.
-    logger.warn("revalidateTag gagal", { error: String(error) });
+    logger.warn("revalidateTag gagal", { error: safeError(error) });
   }
   for (const slug of unique) forgetCampaignExistence(slug);
   await invalidateCache(FEATURED_CACHE_KEY);

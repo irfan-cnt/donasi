@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { MAX_SUGGESTIONS, PLATFORM_MAX_AMOUNT, PROVIDER_MIN_AMOUNT } from "@/lib/campaign-rules";
 
+// P25: modul ini ikut ke bundle klien (slugify di editor admin). Zod 4 mendeteksi JIT dengan
+// `Function("")` yang dilaporkan sebagai pelanggaran CSP (tanpa 'unsafe-eval'); jitless mematikan
+// deteksi itu (validasi tetap sama, hanya tanpa kompilasi JIT).
+z.config({ jitless: true });
+
 // Validasi input admin campaign, berita, dan penyaluran (P21; BR-01–BR-07, BR-43, AC-24.x).
 // Nominal dikirim client sebagai string digit → bigint (tidak pernah JS number).
 

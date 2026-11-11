@@ -30,6 +30,17 @@ import type { JobServiceDeps } from "@/server/services/jobs/job-deps";
 const ENABLED = process.env.NEON_BRANCH === "dev" && !!process.env.DATABASE_URL;
 const AMOUNT = 50_000n;
 
+/** P25 (L3): penyimpanan filter ekspor di memori (pengganti Redis di test). */
+class MemoryFilterStore {
+  data = new Map<string, Record<string, unknown>>();
+  async save(id: string, f: Record<string, unknown>) {
+    this.data.set(id, f);
+  }
+  async load(id: string) {
+    return this.data.get(id) ?? null;
+  }
+}
+
 class MemoryStore implements ExportStore {
   files = new Map<string, Buffer>();
   async put(key: string, data: Buffer) {
@@ -265,8 +276,10 @@ describe.skipIf(!ENABLED)("admin keuangan P22 (integration)", () => {
     it("async (> batas): antre + token, job menulis berkas sesuai filter + audit selesai", async () => {
       const store = new MemoryStore();
       let queued: ExportJobBody | null = null;
-      const r = await startExport(actor("finance"), { kind: "transactions", filters: { campaign: campaignId, status: "paid" } }, {
+      const filters = new MemoryFilterStore();
+      const r = await startExport(actor("finance"), { kind: "transactions", filters: { campaign: campaignId, status: "paid", q: emailA } }, {
         store,
+        filters,
         publish: async (b) => {
           queued = b;
         },
@@ -276,7 +289,12 @@ describe.skipIf(!ENABLED)("admin keuangan P22 (integration)", () => {
       if (r.mode !== "async") return;
       exportIds.push(r.exportId);
       expect(queued).toMatchObject({ exportId: r.exportId, adminId: adminIds.finance, kind: "transactions" });
-      const out = await runExportJob(queued, { store, log });
+      // P25 (L3): body QStash tanpa filter/kata kunci; filter disimpan di server.
+      expect(JSON.stringify(queued)).not.toContain(emailA);
+      expect(queued).not.toHaveProperty("filters");
+      expect(filters.data.get(r.exportId)).toMatchObject({ q: emailA });
+      expect(await runExportJob({ ...queued! }, { store, log, filters: new MemoryFilterStore() })).toEqual({ failed: "filters_expired" });
+      const out = await runExportJob(queued, { store, log, filters });
       expect(out).toMatchObject({ rows: 1 });
       const file = store.files.get(`exports/transactions/${r.exportId}.csv`)!.toString("utf8");
       expect(file).toContain(paidTx.code);
@@ -321,7 +339,7 @@ describe.skipIf(!ENABLED)("admin keuangan P22 (integration)", () => {
 
     it("I4: status 'failed' bila job tidak menghasilkan berkas setelah batas waktu", async () => {
       const { exportStatus, EXPORT_STALE_MS } = await import("@/server/services/admin-export-service");
-      const r = await startExport(actor("finance"), { kind: "transactions", filters: { campaign: campaignId } }, { store: new MemoryStore(), publish: async () => undefined, syncLimit: 0 });
+      const r = await startExport(actor("finance"), { kind: "transactions", filters: { campaign: campaignId } }, { store: new MemoryStore(), filters: new MemoryFilterStore(), publish: async () => undefined, syncLimit: 0 });
       if (r.mode !== "async") throw new Error("harus async");
       exportIds.push(r.exportId);
       const store = new MemoryStore();

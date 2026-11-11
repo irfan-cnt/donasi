@@ -91,16 +91,25 @@ test.describe("auth admin (P05)", () => {
   test("role editor ditolak akses transaksi → 403 (AC-22.2)", async ({ page, baseURL }) => {
     const editor = await newAdmin({ role: "editor" });
     await setCookie(page, baseURL, ADMIN_COOKIE, await seedAdminSession(editor.id));
-    await page.goto("/admin/transaksi");
-    // forbidden(): UI 403. Status HTTP tetap 200 karena shell PPR sudah di-stream
-    // (cacheComponents) — konten transaksi tidak pernah dirender.
+    // P25 (L2): proxy mengembalikan HTTP 403 sungguhan sebelum streaming.
+    const res = await page.goto("/admin/transaksi");
+    expect(res?.status()).toBe(403);
     await expect(page.getByRole("heading", { name: "Akses ditolak" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Transaksi" })).toHaveCount(0);
 
     const finance = await newAdmin({ role: "finance" });
     await setCookie(page, baseURL, ADMIN_COOKIE, await seedAdminSession(finance.id));
-    await page.goto("/admin/transaksi");
+    expect((await page.goto("/admin/transaksi"))?.status()).toBe(200);
     await expect(page.getByRole("heading", { name: "Transaksi" })).toBeVisible();
+  });
+
+  test("P25 OD-29: role non-owner tanpa TOTP dipaksa setup TOTP", async ({ page, baseURL }) => {
+    const editor = await newAdmin({ role: "editor", totpEnabled: false });
+    await setCookie(page, baseURL, ADMIN_COOKIE, await seedAdminSession(editor.id));
+    await page.goto("/admin");
+    await expect(page).toHaveURL(/\/admin\/setup-totp$/);
+    await page.goto("/admin/campaign");
+    await expect(page).toHaveURL(/\/admin\/setup-totp$/);
   });
 
   test("5 password salah → akun terkunci 15 menit (AC-22.1)", async ({ page }) => {
@@ -132,7 +141,7 @@ test.describe("auth admin (P05)", () => {
   });
 
   test("login pertama owner: ganti password → setup TOTP → dashboard", async ({ page }) => {
-    const owner = await newAdmin({ role: "owner", mustChangePassword: true });
+    const owner = await newAdmin({ role: "owner", mustChangePassword: true, totpEnabled: false });
     await page.goto("/admin/masuk");
     await login(page, owner.email, ADMIN_PASSWORD);
     await expect(page).toHaveURL(/\/admin\/ganti-password$/);
@@ -155,7 +164,8 @@ test.describe("auth admin (P05)", () => {
 
     await page.getByText("Tidak bisa memindai? Masukkan kunci manual").click();
     const secret = (await page.locator("details code").textContent())!.trim();
-    await page.getByLabel("Kode dari aplikasi (6 digit)").fill(authenticator.generate(secret));
+    const setupCode = authenticator.generate(secret);
+    await page.getByLabel("Kode dari aplikasi (6 digit)").fill(setupCode);
     await page.getByRole("button", { name: "Aktifkan autentikator" }).click();
     await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
 
@@ -165,7 +175,13 @@ test.describe("auth admin (P05)", () => {
     await login(page, owner.email, newPassword);
     await expect(page.getByText("Email, password, atau kode autentikator salah.")).toBeVisible();
     await expect(page.getByLabel("Email")).toHaveValue("");
-    await login(page, owner.email, newPassword, authenticator.generate(secret));
+    // P25 (M3): kode yang sama dengan saat setup = replay → ditolak.
+    await login(page, owner.email, newPassword, setupCode);
+    await expect(page.getByText("Email, password, atau kode autentikator salah.")).toBeVisible();
+    await expect(page.getByLabel("Email")).toHaveValue("");
+    // Kode langkah berikutnya (masih dalam toleransi ±1) diterima.
+    const nextCode = authenticator.clone({ ...authenticator.options, epoch: Date.now() + 30_000 }).generate(secret);
+    await login(page, owner.email, newPassword, nextCode);
     await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
 
     expect(await auditActions(owner.id)).toEqual(

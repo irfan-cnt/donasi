@@ -244,6 +244,7 @@ export async function checkTransactionStatus(
             eventId: null,
             providerRef: st.providerRef || null,
             needsReview: st.needsReview,
+            partialRefund: st.partialRefund,
           },
           deps,
         );

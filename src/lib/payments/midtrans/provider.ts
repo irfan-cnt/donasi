@@ -214,6 +214,7 @@ export function createMidtransProvider(deps: MidtransDeps): PaymentProvider {
       providerRef,
       status: mapped.status,
       needsReview: mapped.needsReview || undefined,
+      partialRefund: mapped.partialRefund || undefined,
       paidAmount: mapped.status === "paid" ? amount : undefined,
       paidAt:
         mapped.status === "paid"

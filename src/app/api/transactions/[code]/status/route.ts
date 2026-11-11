@@ -1,9 +1,10 @@
-import { isIP } from "node:net";
 import { NextResponse, type NextRequest } from "next/server";
 import { logger } from "@/lib/logger";
 import { rateLimit } from "@/lib/redis";
 import { transactionStatusQuery, transactionStatusResponse } from "@/lib/validation/transaction-status";
 import { getTransactionStatus } from "@/server/services/payment-service";
+import { safeError } from "@/lib/safe-error";
+import { clientIp as ipFromHeaders } from "@/lib/http/client-ip";
 
 // Polling status transaksi (P12, AC-08.1). Hanya MEMBACA DB: tidak memanggil Midtrans dan tidak
 // mengubah status (BR-18). Token salah/kedaluwarsa → 404 (tidak membocorkan keberadaan kode).
@@ -17,9 +18,9 @@ function json(body: unknown, status = 200, extra: Record<string, string> = {}) {
   return NextResponse.json(body, { status, headers: { ...NO_STORE, ...extra } });
 }
 
+/** P25 (I1): turunan IP terpusat (src/lib/http/client-ip.ts). */
 function clientIp(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? request.headers.get("x-real-ip");
-  return forwarded && isIP(forwarded) ? forwarded : "unknown";
+  return ipFromHeaders(request.headers) ?? "unknown";
 }
 
 export async function GET(request: NextRequest, ctx: RouteContext<"/api/transactions/[code]/status">) {
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/transact
     }
   } catch (error) {
     // OD-15: fail-open (endpoint read-only, token 256-bit).
-    logger.warn("rate limit status transaksi tidak tersedia; fail-open", { error: String(error) });
+    logger.warn("rate limit status transaksi tidak tersedia; fail-open", { error: safeError(error) });
   }
 
   try {

@@ -1,14 +1,16 @@
 import "server-only";
-import { isLocked, registerFailure, LOGIN_MAX_ATTEMPTS } from "@/lib/admin-auth/session-policy";
+import { isLocked, LOCKOUT_MS, LOGIN_MAX_ATTEMPTS } from "@/lib/admin-auth/session-policy";
 import { writeAudit } from "@/lib/audit";
 import { rateLimit } from "@/lib/redis";
 import { decryptSecret, encryptSecret } from "@/lib/security/crypto";
 import { getDummyHash, hashPassword, verifyPassword } from "@/lib/security/password";
-import { generateTotpSecret, verifyTotp } from "@/lib/security/totp";
+import { generateTotpSecret, verifyTotpStep } from "@/lib/security/totp";
 import { normalizeEmail } from "@/server/services/donor-account-service";
 import {
+  claimTotpStep,
   findAdminByEmail,
   findAdminById,
+  incrementFailedLogin,
   updateAdmin,
 } from "@/server/repositories/admin-repository";
 
@@ -66,11 +68,13 @@ export async function authenticateAdmin(
   }
 
   const fail = async (reason: string): Promise<LoginResult> => {
-    const next = registerFailure(admin.failedLoginCount);
-    await updateAdmin(admin.id, next);
+    // P25 (L9): increment atomik — percobaan paralel tidak saling menimpa hitungan.
+    const count = await incrementFailedLogin(admin.id);
     await audit("admin.login_failed", { reason });
-    if (next.lockedUntil) {
-      await audit("admin.lockout", { until: next.lockedUntil.toISOString() });
+    if (count >= LOGIN_MAX_ATTEMPTS) {
+      const lockedUntil = new Date(Date.now() + LOCKOUT_MS);
+      await updateAdmin(admin.id, { failedLoginCount: 0, lockedUntil });
+      await audit("admin.lockout", { until: lockedUntil.toISOString() });
       return { ok: false, reason: "locked" };
     }
     return { ok: false, reason: "invalid" };
@@ -79,14 +83,11 @@ export async function authenticateAdmin(
   if (!(await verifyPassword(admin.passwordHash, input.password))) return fail("password");
 
   if (admin.totpEnabled) {
-    // Kode kosong/salah dihitung gagal & pesan tetap generik (tidak membocorkan password benar).
-    if (
-      !input.totp ||
-      !admin.totpSecretEnc ||
-      !verifyTotp(input.totp, decryptSecret(admin.totpSecretEnc))
-    ) {
-      return fail("totp");
-    }
+    // Kode kosong/salah/dipakai ulang dihitung gagal & pesan tetap generik.
+    const step =
+      input.totp && admin.totpSecretEnc ? verifyTotpStep(input.totp, decryptSecret(admin.totpSecretEnc)) : null;
+    if (step === null) return fail("totp");
+    if (!(await claimTotpStep(admin.id, step))) return fail("totp_replay");
   }
 
   await updateAdmin(admin.id, { failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() });
@@ -140,7 +141,8 @@ export async function confirmTotpSetup(
 ): Promise<{ ok: boolean }> {
   const admin = await findAdminById(adminId);
   if (!admin || admin.totpEnabled || !admin.totpSecretEnc) return { ok: false };
-  if (!verifyTotp(code, decryptSecret(admin.totpSecretEnc))) return { ok: false };
+  const step = verifyTotpStep(code, decryptSecret(admin.totpSecretEnc));
+  if (step === null || !(await claimTotpStep(adminId, step))) return { ok: false };
   await updateAdmin(adminId, { totpEnabled: true });
   await writeAudit({
     actor: { type: "admin", id: adminId },

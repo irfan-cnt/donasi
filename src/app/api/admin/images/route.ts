@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { getRequestMeta, requireAdmin } from "@/lib/admin-auth";
-import { hasPermission } from "@/lib/admin-auth/permissions";
+import { getRequestMeta, requireAdminApi } from "@/lib/admin-auth";
 import { writeAudit } from "@/lib/audit";
 import { ImageValidationError, MAX_IMAGE_BYTES, processImageUpload } from "@/lib/images/process-image";
 import { BodyTooLargeError, readCapped } from "@/lib/http/read-capped";
@@ -9,6 +8,7 @@ import { logger } from "@/lib/logger";
 import { rateLimit } from "@/lib/redis";
 import { getImageStorage } from "@/lib/storage/image-storage";
 import { siteUrl } from "@/lib/site";
+import { safeError } from "@/lib/safe-error";
 
 // Upload gambar campaign/berita/logo metode (OD-12): server-side, sesi admin + permission
 // campaigns.write, news.write, atau payment_methods.write, cek Origin (cookie SameSite=Strict sebagai lapis pertama), magic bytes,
@@ -33,11 +33,11 @@ function sameOrigin(req: Request): boolean {
 }
 
 export async function POST(req: Request) {
-  const ctx = await requireAdmin();
+  // P25 (I4): requireAdminApi → 401/403 JSON (bukan redirect 307).
   // P22: logo metode pembayaran juga diunggah lewat route ini (payment_methods.write).
-  if (!(["campaigns.write", "news.write", "payment_methods.write"] as const).some((p) => hasPermission(ctx.permissions, p))) {
-    return json(403, { error: "Anda tidak punya izin mengunggah gambar." });
-  }
+  const guard = await requireAdminApi(["campaigns.write", "news.write", "payment_methods.write"]);
+  if (!guard.ok) return guard.response;
+  const ctx = guard.ctx;
   if (!sameOrigin(req)) return json(403, { error: "Permintaan ditolak." });
   // H2: content-length wajib & numerik; batas juga ditegakkan pada stream (header bisa bohong).
   const rawLength = req.headers.get("content-length");
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
     return json(201, { url: stored.url, width: image.width, height: image.height });
   } catch (error) {
     if (error instanceof ImageValidationError) return json(422, { error: error.message });
-    logger.error("upload gambar gagal", { error: String(error) });
+    logger.error("upload gambar gagal", { error: safeError(error) });
     return json(500, { error: "Gagal mengunggah gambar. Silakan coba lagi." });
   }
 }

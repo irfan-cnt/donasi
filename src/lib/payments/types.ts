@@ -56,6 +56,8 @@ export interface StatusResult {
   paidAt?: Date;
   /** capture + fraud_status challenge: tetap pending, butuh review manual. */
   needsReview?: boolean;
+  /** Refund parsial (P25, OD-28): tidak diterapkan otomatis. */
+  partialRefund?: boolean;
   raw: unknown;
 }
 

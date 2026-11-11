@@ -46,6 +46,7 @@ CREATE TABLE donors (
   name text NOT NULL,
   phone_e164 text CHECK (phone_e164 ~ '^\+62[0-9]{8,13}$'),
   whatsapp_opt_in boolean NOT NULL DEFAULT false,
+  checkout_authenticated boolean NOT NULL DEFAULT false,  -- P25 (OD-31): dibuat dengan sesi donatur login; false = tamu (WA hanya setelah paid)
   default_anonymous boolean NOT NULL DEFAULT false,
   anonymized_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
@@ -58,6 +59,7 @@ CREATE TABLE donors (
 CREATE TABLE admin_users (
   id uuid PRIMARY KEY, email citext UNIQUE NOT NULL, name text NOT NULL,
   password_hash text NOT NULL, totp_secret_enc text, totp_enabled boolean NOT NULL DEFAULT false,
+  totp_last_step bigint,                        -- P25: langkah waktu TOTP terakhir yang dipakai (anti-replay)
   status admin_status NOT NULL DEFAULT 'active', failed_login_count int NOT NULL DEFAULT 0, locked_until timestamptz,
   last_login_at timestamptz, must_change_password boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
@@ -90,7 +92,7 @@ CREATE TABLE campaigns (
   featured_image_url text, featured_image_alt text,
   target_amount bigint CHECK (target_amount IS NULL OR target_amount > 0),
   collected_amount bigint NOT NULL DEFAULT 0 CHECK (collected_amount >= 0),
-  donor_count int NOT NULL DEFAULT 0,
+  donor_count int NOT NULL DEFAULT 0 CHECK (donor_count >= 0),   -- P25: refund mengurangi
   amount_type amount_type NOT NULL DEFAULT 'open',
   min_amount bigint NOT NULL DEFAULT 10000 CHECK (min_amount >= 1000),
   max_amount bigint CHECK (max_amount IS NULL OR max_amount >= min_amount),

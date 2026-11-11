@@ -156,9 +156,10 @@ export async function searchTransactionsByCode(prefix: string, limit = 5) {
   return res.map((r) => ({ code: String(r.code), campaignTitle: String(r.campaign), status: String(r.status) }));
 }
 
-export async function searchDonorsByEmail(q: string, limit = 5) {
+export async function searchDonorsByEmail(q: string, opts: { exact: boolean }, limit = 5) {
+  const match = opts.exact ? sql`email = ${q.toLowerCase()}` : sql`email like ${likeEscape(q.toLowerCase()) + "%"}`;
   const res = await rows(sql`select id, name, email::text as email from donors
-    where anonymized_at is null and email like ${likeEscape(q.toLowerCase()) + "%"}
+    where anonymized_at is null and ${match}
     order by email limit ${limit}`);
   return res.map((r) => ({ id: String(r.id), name: String(r.name), email: String(r.email) }));
 }

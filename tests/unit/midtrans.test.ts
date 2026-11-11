@@ -79,9 +79,12 @@ describe("pemetaan status Midtrans", () => {
     ["failure", undefined, "failed", false],
     ["cancel", undefined, "cancelled", false],
     ["refund", undefined, "refunded", true],
-    ["partial_refund", undefined, "refunded", true],
   ])("%s/%s → %s", (ts, fs, status, review) => {
     expect(mapTransactionStatus(ts, fs)).toEqual({ status, needsReview: review });
+  });
+
+  it("partial_refund → refunded + partialRefund (P25: tidak diterapkan otomatis)", () => {
+    expect(mapTransactionStatus("partial_refund")).toEqual({ status: "refunded", needsReview: true, partialRefund: true });
   });
 
   it.each(["authorize", "chargeback", "", undefined])("status tak dikenal %s → error", (ts) => {

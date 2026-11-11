@@ -1,7 +1,18 @@
 import "server-only";
 import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { campaignNews, campaigns, donors, sessions, transactions } from "@/lib/db/schema";
+import { checkSession } from "@/lib/admin-auth/session-policy";
+import {
+  adminSessions,
+  adminUserRoles,
+  adminUsers,
+  campaignNews,
+  campaigns,
+  donors,
+  rolePermissions,
+  sessions,
+  transactions,
+} from "@/lib/db/schema";
 
 // Cek keberadaan untuk src/proxy.ts: dengan cacheComponents, notFound() di halaman terjadi setelah
 // shell mulai di-stream (status 200 + noindex). Agar draft/archived/slug salah benar-benar 404,
@@ -139,4 +150,34 @@ export function forgetCampaignExistence(slug: string): void {
   for (const key of memo.keys()) {
     if (key === `c:${slug}` || key.startsWith(`n:${slug}/`)) memo.delete(key);
   }
+}
+
+/**
+ * P25 (L2): permission admin untuk gerbang 403 di proxy. null = sesi tidak valid / langkah wajib
+ * belum selesai (halaman yang menangani redirect). Tidak menyentuh last_seen (read-only).
+ */
+export async function adminSessionPermissions(tokenHash: Buffer): Promise<string[] | null> {
+  const [s] = await getDb()
+    .select({
+      createdAt: adminSessions.createdAt,
+      lastSeenAt: adminSessions.lastSeenAt,
+      expiresAt: adminSessions.expiresAt,
+      revokedAt: adminSessions.revokedAt,
+      adminId: adminUsers.id,
+      status: adminUsers.status,
+      mustChangePassword: adminUsers.mustChangePassword,
+      totpEnabled: adminUsers.totpEnabled,
+    })
+    .from(adminSessions)
+    .innerJoin(adminUsers, eq(adminUsers.id, adminSessions.adminUserId))
+    .where(eq(adminSessions.tokenHash, tokenHash))
+    .limit(1);
+  if (!s || s.status === "disabled" || s.mustChangePassword || !s.totpEnabled) return null;
+  if (checkSession(s) !== "valid") return null;
+  const rows = await getDb()
+    .select({ permission: rolePermissions.permissionCode })
+    .from(adminUserRoles)
+    .innerJoin(rolePermissions, eq(rolePermissions.roleId, adminUserRoles.roleId))
+    .where(eq(adminUserRoles.adminUserId, s.adminId));
+  return rows.map((r) => r.permission);
 }

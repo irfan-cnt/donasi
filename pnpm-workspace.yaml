@@ -1,3 +1,9 @@
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+
+# P25: @vercel/blob → @vercel/oidc@3 (terbaru 3.8.10) → @vercel/cli-config@0.3.1 mem-pin zod 4.1.11
+# (GHSA, high; perbaikan >=4.6.6). Belum ada @vercel/oidc 3.x yang memakai cli-config >=0.3.8.
+# Override sempit ke minor yang sama (4.x); hapus bila @vercel/blob menaikkan dependensinya.
+overrides:
+  "@vercel/cli-config>zod": "^4.6.7"

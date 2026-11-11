@@ -45,6 +45,11 @@ export const serverEnvSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     APP_ENV: z.enum(["development", "preview", "production"]).default("development"),
+    /** Diset otomatis oleh Vercel (development/preview/production); kosong di lokal & CI. */
+    VERCEL_ENV: z
+      .enum(["development", "preview", "production"])
+      .optional()
+      .or(z.literal("").transform(() => undefined)),
     APP_URL: z
       .url()
       .optional()
@@ -108,6 +113,16 @@ export const serverEnvSchema = z
     SENTRY_DSN: optionalString,
   })
   .superRefine((env, ctx) => {
+    // P25 (L8): deployment Vercel preview/production TIDAK boleh berjalan sebagai development
+    // (termasuk APP_ENV kosong → default development): cookie admin non-__Host-, /api/dev-uploads,
+    // fallback rate limit in-memory. Lokal, test, dan CI (tanpa VERCEL_ENV) tidak terpengaruh.
+    if ((env.VERCEL_ENV === "production" || env.VERCEL_ENV === "preview") && env.APP_ENV === "development") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["APP_ENV"],
+        message: `wajib diisi (preview/production) di deployment Vercel ${env.VERCEL_ENV}`,
+      });
+    }
     if (env.APP_ENV !== "development") {
       for (const key of DEPLOYED_REQUIRED) {
         if (!env[key])

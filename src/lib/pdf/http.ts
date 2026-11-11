@@ -1,8 +1,9 @@
 import "server-only";
-import { isIP } from "node:net";
 import { NextResponse, type NextRequest } from "next/server";
 import { logger } from "@/lib/logger";
 import { rateLimit } from "@/lib/redis";
+import { safeError } from "@/lib/safe-error";
+import { clientIp as ipFromHeaders } from "@/lib/http/client-ip";
 
 // Respons PDF (P19): selalu private, no-store, no-referrer; unduhan sebagai lampiran.
 export const PDF_NO_STORE = {
@@ -29,10 +30,9 @@ export function pdfError(status: 404 | 429 | 500, extra: Record<string, string> 
   return NextResponse.json({ error }, { status, headers: { ...PDF_NO_STORE, ...extra } });
 }
 
+/** P25 (I1): turunan IP terpusat (src/lib/http/client-ip.ts). */
 export function clientIp(request: NextRequest): string {
-  const forwarded =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? request.headers.get("x-real-ip");
-  return forwarded && isIP(forwarded) ? forwarded : "unknown";
+  return ipFromHeaders(request.headers) ?? "unknown";
 }
 
 /** Render PDF berat → 20/menit per identitas. null = boleh; selain itu respons 429. Fail-open bila Redis mati. */
@@ -42,7 +42,7 @@ export async function pdfRateLimit(identifier: string): Promise<NextResponse | n
     if (rl.success) return null;
     return pdfError(429, { "Retry-After": String(Math.max(1, Math.ceil((rl.reset - Date.now()) / 1000))) });
   } catch (error) {
-    logger.warn("rate limit PDF tidak tersedia; fail-open", { error: String(error) });
+    logger.warn("rate limit PDF tidak tersedia; fail-open", { error: safeError(error) });
     return null;
   }
 }

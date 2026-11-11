@@ -2,6 +2,7 @@
 
 ## Campaign
 - **BR-01** Status campaign: `draft → published ⇄ paused → completed → archived`. `draft` hanya bisa ke `published` atau dihapus. `archived` final (tidak tampil publik).
+  - > **P25 (OD-30, diputuskan 11 Nov 2026):** arsip **hanya dari `completed`** (draft/published/paused tidak bisa langsung diarsipkan). Draft tanpa transaksi dihapus; campaign berjalan diselesaikan dulu (`completed`) lalu diarsipkan — mencegah campaign tersembunyi saat pembayaran masih bisa masuk.
   - > **Catatan P21 (deviasi):** arsip dari `draft`/`published`/`paused` diizinkan (P21 #3: campaign yang tidak bisa dihapus permanen diarsipkan) — menunggu konfirmasi PM.
 - **BR-02** Campaign `published` wajib punya: judul, slug unik, ringkasan, deskripsi, gambar utama (dengan alt), kategori, tipe nominal valid.
 - **BR-03** Campaign menerima donasi bila: `status = published` AND (`start_at` NULL atau ≤ now) AND (`end_at` NULL atau > now).
@@ -26,7 +27,8 @@
 - **BR-17** Ganti metode: payment pending lama di-expire ke provider lebih dulu; bila expire gagal dan kemudian dibayar, kedua payment tetap dicatat dan kelebihan ditandai `needs_review` (tidak menambah total dua kali untuk satu transaksi; selisih dicatat sebagai temuan rekonsiliasi untuk refund manual).
 - **BR-18** Status hanya berubah dari webhook terverifikasi, rekonsiliasi API provider, atau job expiry yang telah mengecek provider. Redirect URL **tidak pernah** mengubah status.
 - **BR-19** Total campaign (`collected_amount`, `donor_count`) hanya bertambah pada transisi pertama transaksi ke `paid`, dalam DB transaction yang sama, dengan guard `WHERE status <> 'paid'`.
-- **BR-20** State machine payment: `created → pending → {paid, expired, failed, cancelled}`; `paid → refunded` (masa depan). Transisi lain ditolak dan dicatat sebagai anomali. Event yang datang terlambat (mis. `expired` setelah `paid`) diabaikan.
+  - > **P25 (OD-28, diputuskan 11 Nov 2026) — refund:** total **berkurang tepat sekali** pada transisi pertama transaksi `paid → refunded` (guard `WHERE status = 'paid' RETURNING`) di DB transaction yang sama: `collected_amount -= amount`, `donor_count -= 1`, audit `campaign.total_reversed`; CHECK `collected_amount >= 0` dan `donor_count >= 0` (tidak pernah negatif — pelanggaran = rollback + alert). Hanya refund **penuh** yang dilaporkan provider (`refund`) yang diterapkan, dan hanya lewat cek status admin; `partial_refund` (nominal tidak diketahui sistem) **tidak ditebak**: status tidak berubah, dicatat `needs_review`.
+- **BR-20** State machine payment: `created → pending → {paid, expired, failed, cancelled}`; `paid → refunded` (refund penuh via cek status admin, P25/OD-28). Transisi lain ditolak dan dicatat sebagai anomali. Event yang datang terlambat (mis. `expired` setelah `paid`) diabaikan.
 - **BR-21** Refund tidak diotomasi di MVP; bila terjadi, dicatat manual oleh `finance` dengan alasan, mengurangi total campaign, dan masuk audit log.
 
 ## Donatur & privasi
@@ -35,6 +37,7 @@
 - **BR-24** Identitas donor dikenali per email ternormalisasi (lowercase, trim). Tamu dengan email sama = satu record `donors`.
 - **BR-25** Klaim transaksi tamu hanya untuk email Google terverifikasi yang sama persis.
 - **BR-26** WhatsApp hanya dikirim bila donatur memberi consent eksplisit pada transaksi atau di profil.
+  - > **P25 (OD-31, diputuskan 11 Nov 2026):** transaksi **tamu** (checkout tanpa sesi donatur login) hanya mendapat WhatsApp **setelah pembayaran terkonfirmasi** (`payment.paid`) dan consent dicentang (OD-19); pending/pengingat/gagal/kedaluwarsa tanpa WA. Email tidak berubah. Checkout dibatasi juga per nomor WA (5/jam). Nama donatur di teks notifikasi dibersihkan dari URL/domain.
 
 ## Kuitansi
 - **BR-27** Kuitansi hanya untuk transaksi `paid`; nomor `KW/{YYYY}/{seq 6 digit}` berurutan tanpa celah per tahun (sequence di DB, dibuat saat transisi ke paid).
@@ -64,7 +67,9 @@
 | settings.write / admins.manage | ✅ | ➖ | ➖ | ➖ |
 | audit.read | ✅ | ✅ | ✅ | ➖ |
 
+- > **P25 (OD-29, diputuskan 11 Nov 2026):** TOTP **wajib untuk semua role** (owner, admin, finance, editor). Admin tanpa TOTP aktif dipaksa menyelesaikan setup TOTP pada login berikutnya sebelum mengakses panel.
+
 - **BR-41** Admin tidak dapat menandai transaksi `paid` secara manual.
 - **BR-42** Minimal satu `owner` aktif harus selalu ada.
 - **BR-43** Rincian penyaluran dana (OD-06): nominal `bigint` rupiah > 0; total penyaluran per campaign tidak boleh melebihi `collected_amount`; setiap perubahan masuk audit log; entri dihapus secara soft delete (tidak hard delete).
-  - > **Catatan P21:** penyaluran hanya untuk campaign non-draft; berita bukti wajib terbit & milik campaign yang sama. Celah diketahui: refund belum menurunkan `collected_amount` (alur refund belum dirancang), sehingga batas ini bisa longgar setelah refund.
+  - > **Catatan P21:** penyaluran hanya untuk campaign non-draft; berita bukti wajib terbit & milik campaign yang sama. Sejak P25 (OD-28) refund penuh menurunkan `collected_amount`; bila total penyaluran sudah melebihi total baru, data tetap konsisten secara DB (CHECK hanya `>= 0`) dan admin mendapat alert untuk ditindaklanjuti manual.

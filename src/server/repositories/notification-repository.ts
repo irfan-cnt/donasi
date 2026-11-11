@@ -22,6 +22,8 @@ export interface NotificationContext {
   donorEmail: string;
   donorPhone: string | null;
   whatsappOptIn: boolean;
+  /** P25 (OD-31): false = transaksi tamu. */
+  checkoutAuthenticated: boolean;
   createdAt: Date;
   payment: {
     status: string;
@@ -47,6 +49,7 @@ export async function findNotificationContext(
       donorEmail: transactions.donorEmailSnapshot,
       donorPhone: transactions.donorPhoneSnapshot,
       whatsappOptIn: transactions.whatsappOptIn,
+      checkoutAuthenticated: transactions.checkoutAuthenticated,
       createdAt: transactions.createdAt,
     })
     .from(transactions)

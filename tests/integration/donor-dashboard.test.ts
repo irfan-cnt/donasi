@@ -216,6 +216,11 @@ describe.skipIf(!ENABLED)("dashboard donor & klaim (integration)", () => {
     expect(audit!.m).not.toContain("6281234567890");
     expect(audit!.m).not.toContain("Nama Baru");
 
+    // P25 (L7): metadata perangkat & log notifikasi ikut disamarkan.
+    await sql`update transactions set ip_hash = ${Buffer.alloc(32, 1)}, user_agent = 'vitest-ua' where id = ${trx.id}`;
+    const logId = randomUUID();
+    await sql`insert into notification_logs (id, channel, recipient, event, transaction_id, status, attempt, request_payload, error_message)
+      values (${logId}, 'email', ${email}, 'payment.paid', ${trx.id}, 'sent', 1, ${JSON.stringify({ to: email })}::jsonb, ${`gagal untuk ${email}`})`;
     expect(await deleteDonorAccount({ donorId: donor!.id, userId: "00000000-0000-0000-0000-000000000000", ip: null, ua: null })).toBe(false);
     expect(await deleteDonorAccount({ donorId: donor!.id, userId, ip: null, ua: null })).toBe(true);
     const [d] = await sql`select name, email::text as email, phone_e164, user_id, anonymized_at from donors where id = ${donor!.id}`;
@@ -228,6 +233,11 @@ describe.skipIf(!ENABLED)("dashboard donor & klaim (integration)", () => {
     expect(t!.e).toBe(`deleted+${trx.id}@invalid`);
     expect(t!.n).toBe("Donatur Terhapus");
     expect(t!.status).toBe("paid");
+    const [t2] = await sql`select ip_hash, user_agent from transactions where id = ${trx.id}`;
+    expect(t2).toEqual({ ip_hash: null, user_agent: null });
+    const [nl] = await sql`select recipient, request_payload, error_message, status from notification_logs where id = ${logId}`;
+    expect(nl).toEqual({ recipient: "dihapus@invalid", request_payload: null, error_message: null, status: "sent" });
+    await sql`delete from notification_logs where id = ${logId}`;
     expect((await sql`select 1 from users where id = ${userId}`).length).toBe(0);
     const [o] = await sql`select access_token_expires_at <= now() as expired, status from transactions where id = ${open.id}`;
     expect(o).toMatchObject({ expired: true, status: "pending" });

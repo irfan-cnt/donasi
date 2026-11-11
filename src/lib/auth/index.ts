@@ -11,6 +11,7 @@ import { logger } from "@/lib/logger";
 import { findDonorByUserId, type DonorRow } from "@/server/repositories/donor-repository";
 import { ensureDonorAccount, normalizeEmail } from "@/server/services/donor-account-service";
 import { DEFAULT_DONOR_CALLBACK, sanitizeCallbackUrl } from "./callback-url";
+import { safeError } from "@/lib/safe-error";
 
 const DAY = 24 * 60 * 60;
 
@@ -68,7 +69,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
     },
     logger: {
       error(error) {
-        logger.error("auth: error", { name: error.name, message: error.message });
+        // P25 (L11): tanpa message (bisa memuat detail DB/PII); tipe Auth.js cukup untuk diagnosis.
+        logger.error("auth: error", { error: safeError(error), type: (error as { type?: string }).type });
       },
       warn(code) {
         logger.warn("auth: warn", { code });

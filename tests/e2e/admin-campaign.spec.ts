@@ -34,7 +34,7 @@ test.afterAll(async () => {
 });
 
 async function loginAs(page: Page, baseURL: string | undefined, role: "owner" | "editor") {
-  const admin = await seedAdmin({ role, totpEnabled: role === "owner", name: `Uji P21 ${role}` });
+  const admin = await seedAdmin({ role, totpEnabled: true, name: `Uji P21 ${role}` });
   seeded.push(admin);
   const token = await seedAdminSession(admin.id);
   await page.context().addCookies([{ name: ADMIN_COOKIE, value: token, url: baseURL ?? "http://localhost:3100" }]);

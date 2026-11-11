@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { logger } from "@/lib/logger";
 import { sha256 } from "@/lib/security/crypto";
+import { adminPagePermission } from "@/lib/admin-auth/page-permissions";
+import { API_CSP, buildCsp, createNonce, isTokenBearingPath } from "@/lib/security/headers";
+import { blobStoreHost } from "@/lib/storage/blob-host";
 import { readCampaignPreviewToken } from "@/lib/security/preview-token";
 import { normalizeSlug } from "@/lib/slug";
 import { isTransactionCode } from "@/lib/transaction-code";
@@ -9,9 +12,11 @@ import {
   previewCampaignExists,
   publicCampaignExists,
   publicNewsExists,
+  adminSessionPermissions,
   transactionAccessExists,
   transactionTokenValid,
 } from "@/server/queries/public-route-exists";
+import { safeError } from "@/lib/safe-error";
 
 // Lapisan pertama saja (optimistic): cek keberadaan cookie sesi. Validasi sesi sebenarnya
 // ada di requireDonor()/requireAdmin() pada layout/halaman/action (security.md §3).
@@ -40,6 +45,29 @@ function canonicalCampaignRedirect(request: NextRequest) {
   const url = request.nextUrl.clone();
   url.pathname = `/campaign/${lower}${match[2] ?? ""}`;
   return NextResponse.redirect(url, 301);
+}
+
+/**
+ * P25 (L2): halaman admin tanpa permission → HTTP 403 sungguhan (rewrite ke /akses-ditolak)
+ * sebelum streaming. Sesi tidak valid/langkah wajib → diteruskan (halaman me-redirect). Error DB
+ * → fail-open ke halaman, yang tetap memanggil requireAdmin(permission) (UI 403).
+ */
+async function adminPermissionGate(request: NextRequest) {
+  const required = adminPagePermission(request.nextUrl.pathname);
+  if (!required) return NextResponse.next();
+  const token = ADMIN_COOKIES.map((name) => request.cookies.get(name)?.value).find(Boolean) ?? "";
+  try {
+    const permissions = token ? await adminSessionPermissions(sha256(token)) : null;
+    if (permissions && !permissions.includes(required)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/akses-ditolak";
+      url.search = "";
+      return NextResponse.rewrite(url, { status: 403 });
+    }
+  } catch (error) {
+    logger.warn("cek permission admin gagal; fail-open", { error: safeError(error) });
+  }
+  return NextResponse.next();
 }
 
 /** Rewrite ke path tanpa route → halaman not-found Next dengan status 404 sungguhan. */
@@ -73,7 +101,7 @@ async function campaignExistenceGate(request: NextRequest) {
     return exists ? NextResponse.next() : notFoundResponse(request);
   } catch (error) {
     // Fail-open: halaman tetap memanggil notFound() sendiri (soft 404 + noindex).
-    logger.warn("cek keberadaan campaign gagal; fail-open", { error: String(error) });
+    logger.warn("cek keberadaan campaign gagal; fail-open", { error: safeError(error) });
     return NextResponse.next();
   }
 }
@@ -100,7 +128,7 @@ async function donationGate(request: NextRequest) {
     return exists ? NextResponse.next() : notFoundResponse(request);
   } catch (error) {
     // Fail-open: halaman memvalidasi ulang dan memanggil notFound() sendiri.
-    logger.warn("cek rute donasi gagal; fail-open", { error: String(error) });
+    logger.warn("cek rute donasi gagal; fail-open", { error: safeError(error) });
     return NextResponse.next();
   }
 }
@@ -125,13 +153,58 @@ async function transactionGate(request: NextRequest) {
       (await transactionTokenValid(code, sha256(token)));
     return ok ? NextResponse.next() : notFoundResponse(request);
   } catch (error) {
-    logger.warn("cek rute transaksi gagal; fail-open", { error: String(error) });
+    logger.warn("cek rute transaksi gagal; fail-open", { error: safeError(error) });
     return NextResponse.next();
   }
 }
 
+// Host Blob dihitung sekali (env build/runtime; tidak memuat secret — hanya id store publik).
+const BLOB_HOST = blobStoreHost({
+  BLOB_STORE_ID: process.env.BLOB_STORE_ID,
+  BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
+});
+
+/**
+ * P25 (T-45): CSP ber-nonce untuk setiap respons yang melewati proxy. Nonce juga diteruskan ke
+ * request (header `Content-Security-Policy` + `x-nonce`) agar Next menempelkannya ke script
+ * framework/inline saat render. Header statis lain (XFO, nosniff, HSTS, ...) di next.config.ts.
+ */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const isApi = pathname.startsWith("/api/");
+  const nonce = createNonce();
+  const csp = isApi
+    ? API_CSP
+    : buildCsp(nonce, {
+        APP_ENV: process.env.APP_ENV,
+        APP_URL: process.env.APP_URL,
+        NODE_ENV: process.env.NODE_ENV,
+        blobHost: BLOB_HOST,
+      });
+  const response = isApi ? NextResponse.next() : await route(request);
+  // Respons next/rewrite: teruskan header request yang diperbarui (setara
+  // NextResponse.next({ request: { headers } })).
+  if (!isApi && (response.headers.has("x-middleware-next") || response.headers.has("x-middleware-rewrite"))) {
+    const forwarded = new Headers(request.headers);
+    forwarded.set("x-nonce", nonce);
+    forwarded.set("Content-Security-Policy", csp);
+    const keys: string[] = [];
+    for (const [key, value] of forwarded) {
+      response.headers.set(`x-middleware-request-${key}`, value);
+      keys.push(key);
+    }
+    response.headers.set("x-middleware-override-headers", keys.join(","));
+  }
+  response.headers.set("Content-Security-Policy", csp);
+  if (isTokenBearingPath(pathname)) response.headers.set("Referrer-Policy", "no-referrer");
+  return response;
+}
+
+const GATED = /^\/(campaign|donasi|transaksi)\/.+|^\/akun(\/.*)?$|^\/admin(\/.*)?$/;
+
+async function route(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  if (!GATED.test(pathname)) return NextResponse.next();
   if (pathname.startsWith("/donasi/")) return donationGate(request);
   if (pathname.startsWith("/transaksi/")) return transactionGate(request);
   if (pathname.startsWith("/campaign/")) {
@@ -140,7 +213,8 @@ export async function proxy(request: NextRequest) {
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     if (pathname === "/admin/masuk") return NextResponse.next();
     const hasAdmin = ADMIN_COOKIES.some((name) => request.cookies.has(name));
-    return hasAdmin ? NextResponse.next() : redirectTo(request, "/admin/masuk", false);
+    if (!hasAdmin) return redirectTo(request, "/admin/masuk", false);
+    return adminPermissionGate(request);
   }
   const hasDonor = DONOR_COOKIES.some((name) => request.cookies.has(name));
   if (!hasDonor) return redirectTo(request, "/masuk", true);
@@ -160,9 +234,14 @@ async function donorTransactionGate(request: NextRequest) {
     const access = token ? await donorTransactionAccess(token, code) : "no_session";
     return access === "not_found" ? notFoundResponse(request) : NextResponse.next();
   } catch (error) {
-    logger.warn("cek transaksi donor gagal; fail-open", { error: String(error) });
+    logger.warn("cek transaksi donor gagal; fail-open", { error: safeError(error) });
     return NextResponse.next();
   }
 }
 
-export const config = { matcher: ["/campaign/:path+", "/donasi/:path+", "/transaksi/:path+", "/akun", "/akun/:path*", "/admin", "/admin/:path*"] };
+// P25: proxy berjalan di semua path (CSP ber-nonce untuk setiap halaman, termasuk 404/error);
+// gerbang auth/keberadaan tetap hanya untuk prefix di GATED. Aset statis build & optimizer
+// gambar dikecualikan (header statis tetap dari next.config.ts).
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon|apple-icon).*)"],
+};

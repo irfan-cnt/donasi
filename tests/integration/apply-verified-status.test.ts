@@ -105,6 +105,7 @@ describe.skipIf(!ENABLED)("applyVerifiedStatus (integration)", () => {
     }
     if (txIds.length) await sql`delete from transactions where id = any(${txIds}::uuid[])`;
     await sql`delete from donors where id = ${donorId}`;
+    await sql`delete from audit_logs where entity_type = 'campaign' and entity_id = ${campaignId}`;
     await sql`delete from campaigns where id = ${campaignId}`;
     // Kembalikan counter hanya bila tak ada kuitansi lain yang terbit sesudah milik uji.
     if (receiptsIssued) {
@@ -265,6 +266,47 @@ describe.skipIf(!ENABLED)("applyVerifiedStatus (integration)", () => {
       eventId: null,
     });
     expect(r).toMatchObject({ outcome: "ignored_transition", alert: null });
+  });
+
+  it("P25 OD-28: refund penuh admin_check (paralel) → total berkurang tepat sekali + audit", async () => {
+    const { txId, paymentId } = await newPendingPayment();
+    provider.set(paymentId, "paid");
+    const paid = await apply({ paymentId, status: "paid", amount: AMOUNT, paidAt: new Date(), source: "webhook", eventId: null });
+    expect(paid.becamePaid).toBe(true);
+    receiptsIssued += 1;
+    const before = await campaign();
+    const refund = () =>
+      apply({ paymentId, status: "refunded", amount: null, paidAt: null, source: "admin_check", eventId: null, needsReview: true });
+    const results = await Promise.all([refund(), refund(), refund()]);
+    expect(results.filter((r) => r.transactionStatus === "refunded")).toHaveLength(1);
+    const after = await campaign();
+    expect(BigInt(after.c)).toBe(BigInt(before.c) - AMOUNT);
+    expect(after.n).toBe(before.n - 1);
+    const [t] = await sql`select status from transactions where id = ${txId}`;
+    expect(t).toEqual({ status: "refunded" });
+    const audits = await sql`select metadata from audit_logs where entity_id = ${campaignId} and action = 'campaign.total_reversed'
+      and metadata->>'paymentId' = ${paymentId}`;
+    expect(audits).toHaveLength(1);
+    // Paid ulang setelah refunded tidak pernah menambah total lagi (state machine + guard BR-19).
+    const again = await apply({ paymentId, status: "paid", amount: AMOUNT, paidAt: new Date(), source: "webhook", eventId: null });
+    expect(again.becamePaid).toBe(false);
+    expect(await campaign()).toEqual(after);
+  });
+
+  it("P25 OD-28: partial_refund tidak diterapkan (needs_review), total tetap", async () => {
+    const { txId, paymentId } = await newPendingPayment();
+    provider.set(paymentId, "paid");
+    await apply({ paymentId, status: "paid", amount: AMOUNT, paidAt: new Date(), source: "webhook", eventId: null });
+    receiptsIssued += 1;
+    const before = await campaign();
+    const r = await apply({
+      paymentId, status: "refunded", amount: null, paidAt: null, source: "admin_check", eventId: null,
+      needsReview: true, partialRefund: true,
+    });
+    expect(r).toMatchObject({ outcome: "ignored_transition", changed: false, alert: { kind: "refund_reported" } });
+    expect(await campaign()).toEqual(before);
+    const [t] = await sql`select status from transactions where id = ${txId}`;
+    expect(t).toEqual({ status: "paid" });
   });
 
   it("pending + needsReview (capture/challenge) → alert needs_review + audit, status tetap", async () => {

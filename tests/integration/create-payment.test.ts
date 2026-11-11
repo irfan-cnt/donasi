@@ -120,6 +120,23 @@ describe.skipIf(!ENABLED)("createPayment (integration)", () => {
     await sql`delete from campaigns where id = ${campaignId}`;
   });
 
+  it("P25 L6: rate limit per transaksi / per IP → ditolak sebelum charge; Redis gagal → fail-closed (non-development)", async () => {
+    const t = await newTransaction();
+    const calls: unknown[][] = [];
+    const deny = (name: string) => async (...args: unknown[]) => {
+      calls.push(args);
+      return { success: args[0] !== name, limit: 1, remaining: 0, reset: Date.now() + 60_000, pending: Promise.resolve() };
+    };
+    const before = provider.calls.create.length;
+    const r1 = await createPaymentForTransaction(input(t), log, deps({ rateLimit: deny("create-payment-trx") as never }), "203.0.113.5");
+    expect(r1).toMatchObject({ ok: false, reason: "rate_limited" });
+    const r2 = await createPaymentForTransaction(input(t), log, deps({ rateLimit: deny("create-payment-ip") as never }), "203.0.113.5");
+    expect(r2).toMatchObject({ ok: false, reason: "rate_limited" });
+    expect(calls.map((c) => c[0])).toEqual(["create-payment-trx", "create-payment-trx", "create-payment-ip"]);
+    expect(calls[0]?.slice(2)).toEqual([10, "1 h"]);
+    expect(provider.calls.create.length).toBe(before);
+  });
+
   it("membuat payment pending (id UUIDv7 = order_id) + instruksi + enqueue payment.pending", async () => {
     const t = await newTransaction();
     const r = await createPaymentForTransaction(input(t), log, deps());

@@ -162,3 +162,17 @@ describe("BLOB_READ_WRITE_TOKEN (P21, OD-12)", () => {
     expect(() => parseServerEnv({ ...valid, APP_ENV: "production", BLOB_READ_WRITE_TOKEN: "" })).toThrow(/BLOB_READ_WRITE_TOKEN/);
   });
 });
+
+describe("env schema — APP_ENV di Vercel (P25 L8)", () => {
+  it("VERCEL_ENV preview/production + APP_ENV kosong/development → gagal", () => {
+    for (const VERCEL_ENV of ["preview", "production"]) {
+      expect(() => parseServerEnv({ ...valid, VERCEL_ENV })).toThrow(/APP_ENV/);
+      expect(() => parseServerEnv({ ...valid, VERCEL_ENV, APP_ENV: "development" })).toThrow(/APP_ENV/);
+    }
+  });
+  it("lokal/CI (tanpa VERCEL_ENV) tetap boleh default development; preview eksplisit diterima", () => {
+    expect(parseServerEnv({ ...valid }).APP_ENV).toBe("development");
+    expect(parseServerEnv({ ...valid, VERCEL_ENV: "development" }).APP_ENV).toBe("development");
+    expect(parseServerEnv({ ...valid, VERCEL_ENV: "preview", APP_ENV: "preview", MIDTRANS_IS_PRODUCTION: "false" }).APP_ENV).toBe("preview");
+  });
+});

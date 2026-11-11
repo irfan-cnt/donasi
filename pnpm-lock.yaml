@@ -4,13 +4,16 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@vercel/cli-config>zod': ^4.6.7
+
 importers:
 
   .:
     dependencies:
       '@auth/drizzle-adapter':
         specifier: ^1.11.3
-        version: 1.11.3(nodemailer@7.0.13)
+        version: 1.11.3(nodemailer@10.5.0)
       '@base-ui/react':
         specifier: ^1.9.0
         version: 1.9.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -70,13 +73,13 @@ importers:
         version: 16.4.6(@babel/core@7.29.13)(@playwright/test@1.65.0)(@types/node@20.19.43)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       next-auth:
         specifier: 5.0.0-beta.32
-        version: 5.0.0-beta.32(next@16.4.6(@babel/core@7.29.13)(@playwright/test@1.65.0)(@types/node@20.19.43)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(nodemailer@7.0.13)(react@19.3.0)
+        version: 5.0.0-beta.32(next@16.4.6(@babel/core@7.29.13)(@playwright/test@1.65.0)(@types/node@20.19.43)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(nodemailer@10.5.0)(react@19.3.0)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       nodemailer:
-        specifier: ^7.0.13
-        version: 7.0.13
+        specifier: ^10.5.0
+        version: 10.5.0
       otplib:
         specifier: 12.0.1
         version: 12.0.1
@@ -98,9 +101,6 @@ importers:
       server-only:
         specifier: ^0.0.1
         version: 0.0.1
-      shadcn:
-        specifier: ^4.23.0
-        version: 4.23.0
       sharp:
         specifier: ^0.35.5
         version: 0.35.5(@types/node@20.19.43)
@@ -127,8 +127,8 @@ importers:
         specifier: ^20
         version: 20.19.43
       '@types/nodemailer':
-        specifier: ^7.0.12
-        version: 7.0.12
+        specifier: ^8.0.2
+        version: 8.0.2
       '@types/qrcode':
         specifier: 1.5.5
         version: 1.5.5
@@ -165,6 +165,9 @@ importers:
       prettier-plugin-tailwindcss:
         specifier: ^0.8.1
         version: 0.8.1(prettier@3.9.10)
+      shadcn:
+        specifier: ^4.23.0
+        version: 4.23.0
       tailwindcss:
         specifier: 4.3.3
         version: 4.3.3
@@ -1861,8 +1864,8 @@ packages:
   '@types/node@20.19.43':
     resolution: {integrity: sha512-6oYBAi5ikg4Pl+kGsoYtawUMBT2zZMCvPNF7pVLnHZfd1zf38DRiWn/gT01RYCdUqkv7Fhr+C9ot4/tb+2sVvA==}
 
-  '@types/nodemailer@7.0.12':
-    resolution: {integrity: sha512-80vKwiIsVSyFA1rRovH59jNPLBOuc6dRZIHEu40gXTkBkZnQv8vog1xSGEb9j5q/tdMAs5ivvDR2pLTU0hGHXA==}
+  '@types/nodemailer@8.0.2':
+    resolution: {integrity: sha512-c7M5ox8p0nEOfbJ2E9Qcmt8/QCu/VzsiAhzBiZbvky2PhKZDHpKB3sQHBM5MEZNkCfBOaS6S9//AGPRTNB7IaA==}
 
   '@types/qrcode@1.5.5':
     resolution: {integrity: sha512-CdfBi/e3Qk+3Z/fXYShipBT13OJ2fDO2Q2w5CIP5anLTLIndQG9z6P1cnm+8zCWSpm5dnxMFd/uREtb0EXuQzg==}
@@ -3804,9 +3807,9 @@ packages:
     resolution: {integrity: sha512-6li2QanLsAXpIH2R6j77MzRyvOyrvdTqlKtO4CgBdHGNvN99ZZfyxszHc5o5+IZBWD5u6Hzwg83JoGXmqZNG9Q==}
     engines: {node: '>=18'}
 
-  nodemailer@7.0.13:
-    resolution: {integrity: sha512-PNDFSJdP+KFgdsG3ZzMXCgquO7I6McjY2vlqILjtJd0hy8wEvtugS9xKRF2NWlPNGxvLCXlTNIae4serI7dinw==}
-    engines: {node: '>=6.0.0'}
+  nodemailer@10.5.0:
+    resolution: {integrity: sha512-L/w/HH5MqpzMDuZD7fQdt/+KqymuvrpaApaIjAH2XA3ILePwlcvXCVVvP75xVrXCEt2ggK2marrrHHFB5Qu0kA==}
+    engines: {node: '>=20.0.0'}
 
   normalize-svg-path@1.1.0:
     resolution: {integrity: sha512-r9KHKG2UUeB5LoTouwDzBy2VxXlHsiM6fyLQvnJa0S5hrhzqElH/CH7TUGhT1fVvIYBIKf3OpY4YJ4CK+iaqHg==}
@@ -4857,9 +4860,6 @@ packages:
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
 
-  zod@4.1.11:
-    resolution: {integrity: sha512-WPsqwxITS2tzx1bzhIKsEs19ABD5vmCVa4xBo2tq/SrV4RNZtfws1EnCWQXM6yh8bD08a1idvkB5MZSBiZsjwg==}
-
   zod@4.6.7:
     resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
@@ -4867,7 +4867,7 @@ snapshots:
 
   '@alloc/quick-lru@5.3.0': {}
 
-  '@auth/core@0.41.3(nodemailer@7.0.13)':
+  '@auth/core@0.41.3(nodemailer@10.5.0)':
     dependencies:
       '@panva/hkdf': 1.2.1
       jose: 6.2.17
@@ -4875,11 +4875,11 @@ snapshots:
       preact: 10.24.3
       preact-render-to-string: 6.5.11(preact@10.24.3)
     optionalDependencies:
-      nodemailer: 7.0.13
+      nodemailer: 10.5.0
 
-  '@auth/drizzle-adapter@1.11.3(nodemailer@7.0.13)':
+  '@auth/drizzle-adapter@1.11.3(nodemailer@10.5.0)':
     dependencies:
-      '@auth/core': 0.41.3(nodemailer@7.0.13)
+      '@auth/core': 0.41.3(nodemailer@10.5.0)
     transitivePeerDependencies:
       - '@simplewebauthn/browser'
       - '@simplewebauthn/server'
@@ -6271,7 +6271,7 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
-  '@types/nodemailer@7.0.12':
+  '@types/nodemailer@8.0.2':
     dependencies:
       '@types/node': 20.19.43
 
@@ -6480,7 +6480,7 @@ snapshots:
   '@vercel/cli-config@0.3.1':
     dependencies:
       xdg-app-paths: 5.5.1
-      zod: 4.1.11
+      zod: 4.6.7
 
   '@vercel/cli-exec@1.0.1':
     dependencies:
@@ -8116,13 +8116,13 @@ snapshots:
 
   neverthrow@7.2.0: {}
 
-  next-auth@5.0.0-beta.32(next@16.4.6(@babel/core@7.29.13)(@playwright/test@1.65.0)(@types/node@20.19.43)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(nodemailer@7.0.13)(react@19.3.0):
+  next-auth@5.0.0-beta.32(next@16.4.6(@babel/core@7.29.13)(@playwright/test@1.65.0)(@types/node@20.19.43)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(nodemailer@10.5.0)(react@19.3.0):
     dependencies:
-      '@auth/core': 0.41.3(nodemailer@7.0.13)
+      '@auth/core': 0.41.3(nodemailer@10.5.0)
       next: 16.4.6(@babel/core@7.29.13)(@playwright/test@1.65.0)(@types/node@20.19.43)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       react: 19.3.0
     optionalDependencies:
-      nodemailer: 7.0.13
+      nodemailer: 10.5.0
 
   next-themes@0.4.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
     dependencies:
@@ -8164,7 +8164,7 @@ snapshots:
 
   node-releases@2.0.63: {}
 
-  nodemailer@7.0.13: {}
+  nodemailer@10.5.0: {}
 
   normalize-svg-path@1.1.0:
     dependencies:
@@ -9320,7 +9320,5 @@ snapshots:
   zod-validation-error@4.0.2(zod@4.6.7):
     dependencies:
       zod: 4.6.7
-
-  zod@4.1.11: {}
 
   zod@4.6.7: {}

@@ -17,6 +17,7 @@ import {
   type AdminActor,
   type MutationResult,
 } from "@/server/services/admin-campaign-service";
+import { safeError } from "@/lib/safe-error";
 
 // Server action admin campaign/berita/penyaluran (P21). Setiap action: requireAdmin(permission
 // BR-40) → Zod di service → audit + revalidateTag di service.
@@ -33,7 +34,7 @@ async function run<T extends object>(fn: () => Promise<MutationResult<T>>): Prom
     return await fn();
   } catch (error) {
     if (error instanceof AdminForbiddenError) return { ok: false, error: "Anda tidak punya izin untuk aksi ini." };
-    logger.error("admin campaign: aksi gagal", { error: String(error) });
+    logger.error("admin campaign: aksi gagal", { error: safeError(error) });
     return { ok: false, error: "Terjadi kesalahan. Silakan coba lagi." };
   }
 }

@@ -87,7 +87,7 @@ describe.skipIf(!ENABLED)("createDonation (integration)", () => {
     const [row] = await sql`
       select encode(access_token_hash, 'hex') as hash, amount::text as amount, donor_name_snapshot,
              donor_email_snapshot, is_anonymous, prayer, ip_hash is not null as has_ip,
-             access_token_expires_at > now() + interval '6 days' as ttl_ok
+             access_token_expires_at > now() + interval '6 days' as ttl_ok, checkout_authenticated
       from transactions where id = ${r.transactionId}`;
     expect(row!.hash).toBe(createHash("sha256").update(r.accessToken).digest("hex"));
     expect(row!.hash).not.toContain(Buffer.from(r.accessToken).toString("hex"));
@@ -97,6 +97,7 @@ describe.skipIf(!ENABLED)("createDonation (integration)", () => {
     expect(row!.is_anonymous).toBe(true);
     expect(row!.has_ip).toBe(true);
     expect(row!.ttl_ok).toBe(true);
+    expect(row!.checkout_authenticated).toBe(false); // P25 OD-31: tamu
 
     expect(await getTransactionByAccess(OPEN, r.code, r.accessToken)).toMatchObject({ code: r.code, amount: 123456n });
     const wrong = "A".repeat(43);

@@ -1,9 +1,12 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { clientIp } from "@/lib/http/client-ip";
 import { requestLogger } from "@/lib/logger";
 import { createPaymentForTransaction } from "@/server/services/payment-service";
+import { safeError } from "@/lib/safe-error";
 
 export interface PaymentFormState {
   error?: string;
@@ -30,11 +33,11 @@ export async function createPaymentAction(
 
   let target: string;
   try {
-    const result = await createPaymentForTransaction(raw, log);
+    const result = await createPaymentForTransaction(raw, log, undefined, clientIp(await headers()));
     if (!result.ok) return { error: result.message, reference };
     target = `/transaksi/${result.code}/instruksi?${new URLSearchParams({ t: String(raw.t) })}`;
   } catch (error) {
-    log.error("createPayment gagal", { error: String(error) });
+    log.error("createPayment gagal", { error: safeError(error) });
     return {
       error: "Pembayaran belum dapat dibuat karena gangguan sistem. Silakan coba lagi.",
       reference,

@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { rateLimit } from "@/lib/redis";
 import { adminSearchSchema } from "@/lib/validation/admin-dashboard";
 import { adminSearch, type AdminSearchResult } from "@/server/services/admin-dashboard-service";
+import { safeError } from "@/lib/safe-error";
 
 export interface AdminSearchState {
   results: AdminSearchResult[];
@@ -21,7 +22,7 @@ export async function adminSearchAction(input: unknown): Promise<AdminSearchStat
   try {
     return { results: await adminSearch(ctx.permissions, parsed.data.q) };
   } catch (error) {
-    logger.error("admin: pencarian gagal", { error: String(error) });
+    logger.error("admin: pencarian gagal", { error: safeError(error) });
     return { results: [], error: "Pencarian gagal. Silakan coba lagi." };
   }
 }

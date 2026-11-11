@@ -14,6 +14,7 @@ import {
   type DonorProfileFieldErrors,
 } from "@/lib/validation/donor";
 import { continuePayment, deleteDonorAccount, saveDonorProfile } from "@/server/services/donor-account-service";
+import { safeError } from "@/lib/safe-error";
 
 const str = (v: FormDataEntryValue | null) => (typeof v === "string" ? v : undefined);
 
@@ -42,7 +43,7 @@ export async function updateProfileAction(_prev: ProfileFormState, formData: For
   try {
     await saveDonorProfile(donor.donorId, parsed.data, await getRequestMeta());
   } catch (error) {
-    logger.error("donor: simpan profil gagal", { error: String(error) });
+    logger.error("donor: simpan profil gagal", { error: safeError(error) });
     return { fieldErrors: { form: "Profil gagal disimpan. Silakan coba lagi." } };
   }
   revalidatePath("/akun", "layout");
@@ -64,7 +65,7 @@ export async function requestAccountDeletionAction(_prev: DeletionFormState, for
   try {
     done = await deleteDonorAccount({ donorId: donor.donorId, userId: donor.userId, ...(await getRequestMeta()) });
   } catch (error) {
-    logger.error("donor: hapus akun gagal", { error: String(error) });
+    logger.error("donor: hapus akun gagal", { error: safeError(error) });
   }
   if (!done) return { error: "Akun gagal dihapus. Silakan coba lagi atau hubungi kami." };
   // Sesi DB sudah terhapus (cascade users); bersihkan cookie juga.
@@ -82,7 +83,7 @@ export async function continuePaymentAction(formData: FormData): Promise<void> {
   const limited = await rateLimit("continue-payment", donor.donorId, 10, "1 h").then(
     (r) => !r.success,
     (error: unknown) => {
-      logger.error("rate limit lanjut bayar tidak tersedia; fail-open", { error: String(error) });
+      logger.error("rate limit lanjut bayar tidak tersedia; fail-open", { error: safeError(error) });
       return false;
     },
   );

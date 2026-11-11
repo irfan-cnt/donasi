@@ -1,5 +1,5 @@
 import "server-only";
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
 import type SMTPTransport from "nodemailer/lib/smtp-transport";
 import { getEnv, requireEnvValue } from "@/lib/env";
 import { getRedis } from "@/lib/redis";
@@ -35,7 +35,7 @@ export interface EmailSender {
   send(message: EmailMessage): Promise<EmailSendResult>;
 }
 
-let transporter: nodemailer.Transporter<SMTPTransport.SentMessageInfo> | undefined;
+let transporter: Transporter<SMTPTransport.SentMessageInfo> | undefined;
 
 export function createGmailSender(): EmailSender {
   return {

@@ -46,6 +46,7 @@ import {
   type NewsRow,
 } from "@/server/repositories/admin-campaign-repository";
 import { invalidateCampaignCaches } from "./campaign-cache";
+import { safeError } from "@/lib/safe-error";
 
 // Admin campaign, berita, penyaluran dana (P21; F-24, F-25, BR-01–BR-07, BR-40, BR-43).
 // Setiap mutasi: cek permission (pertahanan berlapis selain requireAdmin di action), Zod,
@@ -380,7 +381,7 @@ export async function saveCampaign(
       return { ok: false, error: "Data bentrok: slug atau nominal paket/saran sudah dipakai.", fieldErrors: { slug: "Periksa slug & nominal" } };
     }
     if (code === "23514") return { ok: false, error: "Data tidak memenuhi aturan campaign (cek gambar utama, nominal, jadwal)." };
-    logger.error("admin: simpan campaign gagal", { error: String(err) });
+    logger.error("admin: simpan campaign gagal", { error: safeError(err) });
     throw err;
   }
 }
@@ -414,8 +415,8 @@ export async function changeCampaignStatus(
     }
   }
   const now = new Date();
-  await getTxDb().transaction(async (tx) => {
-    await tx
+  const applied = await getTxDb().transaction(async (tx) => {
+    const updated = await tx
       .update(campaigns)
       .set({
         status: to.data,
@@ -425,16 +426,21 @@ export async function changeCampaignStatus(
         updatedBy: actor.adminId,
         updatedAt: now,
       })
-      .where(eq(campaigns.id, id));
+      // P25: guard status lama — transisi dihitung dari status yang dibaca (cegah race).
+      .where(and(eq(campaigns.id, id), eq(campaigns.status, c.status)))
+      .returning({ id: campaigns.id });
+    if (updated.length !== 1) return false;
     const before = { status: c.status, isFeatured: c.isFeatured };
     const after = { status: to.data, isFeatured: to.data === "archived" ? false : c.isFeatured };
     await audit(tx, actor, `campaign.${to.data === "published" ? "publish" : to.data === "paused" ? "pause" : to.data === "completed" ? "complete" : "archive"}`, "campaign", id, before, after);
+    return true;
   });
+  if (!applied) return { ok: false, error: "Status campaign sudah berubah. Muat ulang halaman." };
   await invalidateCampaignCaches(c.slug);
   return { ok: true, status: to.data };
 }
 
-/** Hapus permanen hanya draft tanpa transaksi (AC-24.1); selain itu harus diarsipkan. */
+/** Hapus permanen hanya draft tanpa transaksi (AC-24.1); selain itu selesaikan lalu arsipkan (OD-30). */
 export async function deleteCampaign(actor: AdminActor, id: string): Promise<MutationResult> {
   assertPerm(actor, "campaigns.write");
   const c = await findCampaignById(id);
@@ -444,15 +450,15 @@ export async function deleteCampaign(actor: AdminActor, id: string): Promise<Mut
     return {
       ok: false,
       error: total > 0
-        ? "Campaign sudah punya transaksi sehingga tidak bisa dihapus permanen — arsipkan saja."
-        : "Hanya campaign berstatus draf yang bisa dihapus permanen — arsipkan saja.",
+        ? "Campaign sudah punya transaksi sehingga tidak bisa dihapus permanen — selesaikan lalu arsipkan."
+        : "Hanya campaign berstatus draf yang bisa dihapus permanen — selesaikan lalu arsipkan.",
     };
   }
   const [disb] = await getDb()
     .select({ n: sql<number>`count(*)::int` })
     .from(campaignDisbursements)
     .where(eq(campaignDisbursements.campaignId, id));
-  if ((disb?.n ?? 0) > 0) return { ok: false, error: "Campaign punya catatan penyaluran — arsipkan saja." };
+  if ((disb?.n ?? 0) > 0) return { ok: false, error: "Campaign punya catatan penyaluran — selesaikan lalu arsipkan." };
   // L3: kunci baris campaign & hitung ulang transaksi DI DALAM transaksi DB (cegah race checkout).
   const deleted = await getTxDb().transaction(async (tx) => {
     const locked = await tx.execute(sql`select status from campaigns where id = ${id} for update`);
@@ -464,7 +470,7 @@ export async function deleteCampaign(actor: AdminActor, id: string): Promise<Mut
     await audit(tx, actor, "campaign.delete", "campaign", id, campaignSnapshot(c), null);
     return true;
   });
-  if (!deleted) return { ok: false, error: "Campaign sudah berubah atau punya transaksi — arsipkan saja." };
+  if (!deleted) return { ok: false, error: "Campaign sudah berubah atau punya transaksi — selesaikan lalu arsipkan." };
   await invalidateCampaignCaches(c.slug);
   return { ok: true };
 }
@@ -554,7 +560,7 @@ export async function saveNews(
     if (pgCode(err) === "23505") {
       return { ok: false, error: "Slug sudah dipakai.", fieldErrors: { slug: "Slug sudah dipakai berita lain di campaign ini" } };
     }
-    logger.error("admin: simpan berita gagal", { error: String(err) });
+    logger.error("admin: simpan berita gagal", { error: safeError(err) });
     throw err;
   }
 }

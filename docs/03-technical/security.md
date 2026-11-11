@@ -17,10 +17,11 @@
 ## 2. Autentikasi
 - **Donor:** Auth.js v5 Google, sesi database, cookie `__Secure-` `HttpOnly; Secure; SameSite=Lax`; `email_verified` wajib; `callbackUrl` hanya path relatif.
   - Implementasi (P04): `src/lib/auth/index.ts` (Auth.js + `requireDonor()`), sanitizer murni `src/lib/auth/callback-url.ts` (dipakai di form, server action, dan callback `redirect` Auth.js), `src/proxy.ts` hanya cek keberadaan cookie untuk `/akun/**`. Cookie: `__Secure-authjs.session-token` bila `AUTH_URL` https (`authjs.session-token` di http localhost). Env Google wajib saat `APP_ENV=production`.
-- **Admin:** email + argon2id (m=19456, t=2, p=1), TOTP wajib untuk owner (disarankan semua), lockout 5 gagal/15 menit, sesi `__Host-tk_admin` (`SameSite=Strict`), idle 30 menit, absolut 8 jam, rotasi ID sesi setelah login, tabel `admin_sessions` dengan hash token (SHA-256). Reset password hanya oleh owner + paksa ganti.
+- **Admin:** email + argon2id (m=19456, t=2, p=1), TOTP wajib untuk **semua role** (P25/OD-29; sebelumnya hanya owner), lockout 5 gagal/15 menit, sesi `__Host-tk_admin` (`SameSite=Strict`), idle 30 menit, absolut 8 jam, rotasi ID sesi setelah login, tabel `admin_sessions` dengan hash token (SHA-256). Reset password hanya oleh owner + paksa ganti.
   - Implementasi (P05): `src/lib/admin-auth` (`requireAdmin(permission)`, sesi, kebijakan waktu murni), `src/lib/security/{password,crypto,totp}.ts`, `src/server/services/admin-auth-service.ts`, `src/lib/audit` (`writeAudit` + diff dengan redaksi field `password|secret|token|hash`).
   - Cookie: `__Host-tk_admin` (HttpOnly, Secure, SameSite=Strict, Path=/) di preview/production; `tk_admin` tanpa Secure hanya saat `APP_ENV=development` (http localhost tidak mendukung `__Host-`). Token 32 byte acak, DB menyimpan SHA-256. Login & ganti password merotasi sesi; ganti password mencabut semua sesi lain.
-  - Login pertama: ganti password wajib (`must_change_password`) → setup TOTP via QR (wajib untuk `owner`; role lain opsional/menyusul) → dashboard. `totp_secret_enc` = AES-256-GCM (`APP_ENCRYPTION_KEY`, base64 32 byte, wajib di preview/production), format `v1.iv.tag.ct`.
+  - Login pertama: ganti password wajib (`must_change_password`) → setup TOTP via QR (**wajib untuk semua role** sejak P25/OD-29; admin lama tanpa TOTP dipaksa setup saat login berikutnya) → dashboard.
+  - P25: anti-replay TOTP — `admin_users.totp_last_step` menyimpan langkah waktu (30 s) terakhir yang diterima; kode dengan langkah ≤ nilai itu ditolak, update atomik `WHERE totp_last_step IS NULL OR totp_last_step < $step` (login & konfirmasi setup). Setelah TOTP diaktifkan sesi dirotasi dan sesi lain dicabut. `failed_login_count` dinaikkan atomik (`UPDATE … SET failed_login_count = failed_login_count + 1 RETURNING`). Lockout 5×/15 menit per akun sengaja (risiko DoS lockout tertarget diterima, tercatat di review P25). `totp_secret_enc` = AES-256-GCM (`APP_ENCRYPTION_KEY`, base64 32 byte, wajib di preview/production), format `v1.iv.tag.ct`.
   - Rate limit `admin-login` 5/15 menit per IP+email (Upstash). Fallback in-memory per proses HANYA bila `APP_ENV=development` dan Upstash belum diisi. Lockout DB (`failed_login_count` → `locked_until` +15 menit) selalu berlaku; kode TOTP kosong/salah dihitung gagal. Pesan login generik (tanpa enumerasi email); email tak dikenal tetap menjalankan verifikasi argon2 dummy.
   - Audit: `admin.login`, `admin.login_failed` (reason), `admin.lockout`, `admin.password_change`, `admin.totp_enable`.
   - 403 RBAC memakai `forbidden()` (`experimental.authInterrupts`). Karena `cacheComponents`/PPR men-stream shell lebih dulu, status HTTP halaman tetap 200 dengan UI 403 dan konten tidak dirender; route handler admin (berikutnya) wajib mengembalikan status 403 eksplisit.
@@ -37,12 +38,30 @@
 - Upload gambar: tipe MIME diverifikasi (magic bytes), maks 2 MB, re-encode WebP, nama acak. (Penyimpanan: Vercel Blob — diputuskan OD-12.)
 
 ## 5. Header & browser
-CSP ketat (nonce untuk script), `frame-ancestors 'none'`, HSTS (preload setelah stabil), `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` minimal. Server Actions memeriksa Origin (bawaan Next.js) — `serverActions.allowedOrigins` dibatasi domain sendiri.
+CSP ketat untuk script (nonce per permintaan, tanpa `'unsafe-inline'`), `frame-ancestors 'none'`, HSTS di production, `Referrer-Policy`, `Permissions-Policy` minimal. Server Actions memeriksa Origin (bawaan Next.js) — `serverActions.allowedOrigins` = host `APP_URL` saja.
 
-> **Status P24 (11 Nov 2026):** header CSP **belum diimplementasikan** (tidak ada di `src/proxy.ts` maupun `next.config.ts`; dijadwalkan P25). Vercel Speed Insights memuat skrip dari `/_vercel/speed-insights/script.js` dan mengirim ke `/_vercel/speed-insights/vitals` — keduanya **same-origin**, sehingga CSP nanti cukup `script-src 'self' 'nonce-…'` dan `connect-src 'self'` (tanpa domain tambahan). P24 menambah header `X-Robots-Tag: noindex, nofollow` untuk `/admin`, `/akun`, `/transaksi`, `/donasi`, `/masuk`, `/api` (production) dan seluruh situs di preview/development (`src/lib/seo.ts`).
+**Implementasi P25 (T-45, 11 Nov 2026):**
+- Kode: `src/lib/security/headers.ts` (murni, diuji `tests/unit/security-headers.test.ts`), `src/proxy.ts` (CSP ber-nonce; matcher semua path kecuali `_next/static`, `_next/image`, ikon), `next.config.ts` (header statis untuk **semua** respons termasuk aset & API; `poweredByHeader: false`; `experimental.serverActions.allowedOrigins`).
+- CSP halaman (production, `APP_URL` https):
+  `default-src 'self'; script-src 'self' 'nonce-<acak 128-bit>' 'sha256-7mu4H06fwDCjmnxxr/xNHyuQC6pLTHr4M2E4jXw5WZs='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://<store>.public.blob.vercel-storage.com; font-src 'self'; connect-src 'self'; frame-src 'self'; media-src 'self'; manifest-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com; frame-ancestors 'none'; upgrade-insecure-requests`
+  - `'nonce-…'`: Next menempelkannya ke script framework/RSC pada bagian yang dirender per permintaan (nonce diteruskan lewat header request `Content-Security-Policy`/`x-nonce`).
+  - **Tanpa `'strict-dynamic'`** (berbeda dari rencana awal): dengan `cacheComponents` setiap halaman punya shell prerender yang memuat chunk `/_next/static` **tanpa nonce**; `'strict-dynamic'` mengabaikan `'self'` sehingga seluruh hidrasi terblokir (terverifikasi di browser P25). `'self'` mengizinkan chunk tersebut; nonce mengizinkan script inline per permintaan.
+  - Hash = satu-satunya script inline konstan React di shell (`requestAnimationFrame(function(){$RT=performance.now()});`); test unit memastikan string itu masih ada di react-dom bawaan Next (upgrade yang mengubahnya → test gagal, perbarui hash).
+  - 404 global (`src/app/not-found.tsx`) diberi bagian dinamis (`connection()`) agar script RSC-nya ber-nonce; versi bawaan Next statis penuh dan script inline-nya akan diblokir.
+  - Zod 4 di bundle klien: `z.config({ jitless: true })` (`src/lib/validation/admin-campaign.ts`) — deteksi JIT `Function("")` Zod memicu laporan pelanggaran `unsafe-eval`.
+  - `style-src 'unsafe-inline'`: atribut `style` hasil SSR (progress bar, Recharts) tidak bisa diberi nonce. Risiko injeksi CSS rendah (tidak ada HTML pengguna mentah; rich text disanitasi tanpa atribut `style`). OD-27.
+  - Speed Insights same-origin (`/_vercel/*`) → cukup `'self'`. Login Google: `form-action` + `https://accounts.google.com` (Chrome menerapkan `form-action` pada redirect setelah POST `/api/auth/signin/google`). Midtrans Core API tidak memakai form/iframe; deeplink e-wallet adalah navigasi `<a>`.
+  - `next dev`: + `'unsafe-eval'` (React dev) dan `connect-src ws: wss:` (HMR). `upgrade-insecure-requests` hanya bila `APP_URL` https (tidak merusak `http://localhost`).
+  - Wildcard `*.public.blob.vercel-storage.com` hanya `APP_ENV=development` tanpa store terdeteksi (sama dengan `images.remotePatterns`).
+- CSP API (`/api/**`): `default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`.
+- Semua respons: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), magnetometer=(), gyroscope=(), accelerometer=(), browsing-topics=()`, `Cross-Origin-Opener-Policy: same-origin`.
+- Halaman ber-token (`/transaksi/**`, `/donasi/*/pembayaran`): header `Referrer-Policy: no-referrer` (menimpa default; token `?t=` tidak pernah keluar lewat Referer, termasuk same-origin), selain meta `no-referrer` per halaman (P12).
+- HSTS: `max-age=31536000` hanya bila `APP_ENV=production` **dan** `APP_URL` https. `includeSubDomains`/`preload` = keputusan PM (OD-27). Preview `*.vercel.app` sudah mendapat HSTS dari Vercel.
+- Verifikasi: `tests/e2e/csp.spec.ts` (publik, checkout, 404, transaksi ber-token, admin dashboard/Recharts, editor TipTap, pratinjau email `iframe sandbox srcDoc`, donor `/akun/**`) — nol event `securitypolicyviolation`, hidrasi berjalan.
 
 ## 6. Rahasia
-- Semua di Vercel Environment Variables (Production & Preview terpisah), `.env*` di `.gitignore`, secret scanning GitHub + gitleaks di CI.
+- Semua di Vercel Environment Variables (Production & Preview terpisah), `.env*` di `.gitignore`, secret scanning GitHub + gitleaks di CI (`.github/workflows/gitleaks.yml`, config `.gitleaks.toml`, P25).
+- Bundle klien diperiksa di CI: `pnpm check:bundle-secrets` (nama & nilai secret; `scripts/check-bundle-secrets.ts`, deployment.md).
 - Kredensial provider **tidak pernah** disimpan di DB atau dikirim ke admin UI; UI hanya menampilkan status terkonfigurasi.
 - Rotasi: setiap 6 bulan atau saat staf keluar.
 
@@ -56,13 +75,14 @@ CSP ketat (nonce untuk script), `frame-ancestors 'none'`, HSTS (preload setelah 
 `audit_logs` append-only (tanpa UPDATE/DELETE di role aplikasi — dipaksa via GRANT), mencatat aktor, aksi, entitas, diff, IP, UA.
 
 ## 9. Checklist review keamanan per milestone
-- [ ] Tidak ada secret di bundle (`grep` hasil build `.next/static`)
-- [ ] Semua action punya guard (lint custom / test)
+- [ ] Tidak ada secret di bundle (`pnpm build && pnpm check:bundle-secrets`)
+- [ ] Semua action punya guard (`tests/unit/guard-coverage.test.ts`; endpoint publik baru wajib masuk allowlist beralasan)
 - [ ] Uji IDOR transaksi & PDF
 - [ ] Uji webhook palsu, duplikat, nominal beda
 - [ ] Uji rate limit checkout & login admin
 - [ ] Dependabot/npm audit tanpa high/critical
-- [ ] Header keamanan terpasang
+- [ ] Header keamanan terpasang (`tests/unit/security-headers.test.ts`, `tests/e2e/csp.spec.ts`)
+- [ ] gitleaks hijau (`.github/workflows/gitleaks.yml`)
 
 ### Implementasi P07 (detail campaign & berita)
 - Rich text campaign/news disanitasi server-side saat render (`src/lib/sanitize.ts`, `sanitize-html`, whitelist tanpa img/script/atribut event; link diberi `rel="nofollow noopener noreferrer"`). Editor P21 tetap wajib menyanitasi saat simpan.
@@ -119,3 +139,25 @@ CSP ketat (nonce untuk script), `frame-ancestors 'none'`, HSTS (preload setelah 
   - **L2:** kirim ulang paksa dibatasi **3× per 24 jam (sliding window) per (transaksi, event, kanal)** (`admin-notif-resend-forced`), di samping 20/10 menit per admin.
   - **L3:** `anonymizeDonorAccount` (OD-14) mengganti snapshot transaksi: email → `deleted+{trx}@invalid`, WA → NULL, nama → "Donatur Terhapus". Kirim ulang untuk transaksi seperti ini ditolak di action, dan job yang terlanjur antre dilewati (`skipped`, "data donatur sudah dianonimkan").
   - **L4:** `redactProviderResponse` juga memasking nomor WA yang dikembalikan provider sebagai angka JSON; angka lain (mis. `requestid`) tidak diubah.
+
+### Implementasi P25 (hardening, T-45/T-48) — fase 1
+- Header & CSP: lihat §5.
+- Guard meta-test `tests/unit/guard-coverage.test.ts`: setiap export di `src/server/actions/**` dan `src/app/**/route.ts` harus memanggil `requireAdmin`/`requireAdminApi`, `requireDonor`, verifikasi access token transaksi (`getTransactionStatus`/`guestReceiptPdf`/`createPaymentForTransaction`, yang memverifikasi hash SHA-256), `createJobHandler`/`createNotifyHandler` (signature QStash), atau `handleMidtransWebhook` (signature Midtrans) — atau ada di `PUBLIC_ALLOWLIST` beralasan (login/logout admin & donor, daftar campaign publik, checkout tamu, health, Auth.js, upload lokal dev). `'use server'` di luar `src/server/actions` dilarang. Entri allowlist basi juga gagal.
+- Test tambahan: `tests/unit/security-hardening.test.ts` (HTML/SVG berganti ekstensi, magic bytes PNG palsu, polyglot JPEG+HTML → WebP bersih, decompression bomb > 40 MP; XSS nama/doa donatur & deskripsi di render `CampaignDetailView`, payload sanitizer berita), `tests/integration/rate-limits.test.ts` (login admin & checkout ditolak sebelum efek samping), `tests/unit/bundle-scan.test.ts`, `tests/unit/security-headers.test.ts`, `tests/e2e/csp.spec.ts`. Cakupan yang sudah ada sebelumnya: IDOR transaksi/PDF (`tests/integration/receipt.test.ts`, `transaction-status.test.ts`, `tests/e2e/donor-dashboard.spec.ts`, `checkout.spec.ts`), webhook palsu (`tests/unit/midtrans-webhook.test.ts`, `tests/integration/midtrans-webhook.test.ts`), QStash tanpa/salah signature (`tests/unit/job-route.test.ts`), sanitasi rich text (`tests/unit/campaign-detail.test.ts`, `tests/integration/admin-campaign.test.ts`).
+- Dependensi: `nodemailer` 7.0.13 → 10.5.0 (breaking 8–10 tidak mengenai pemakaian SMTP Gmail kita: kode error `NoAuth`→`ENOAUTH` tidak dipakai, verifikasi TLS default untuk fetch remote, Node ≥ 20) dan `@types/nodemailer` 8; `zod` transitif `@vercel/blob → @vercel/oidc → @vercel/cli-config@0.3.1` (pin 4.1.11) di-override sempit ke `^4.6.7` di `pnpm-workspace.yaml`. Sisa `pnpm audit --prod`: 1 moderate (`minimatch` via `shadcn > ts-morph`) & 1 low (`deepmerge` via `shadcn`, belum ada patch) — keduanya hanya di CLI `shadcn` (generator komponen, tidak dimuat runtime aplikasi). `next-auth` mendeklarasikan peer opsional `nodemailer ^7 || ^8` (hanya untuk provider email Auth.js yang tidak kita pakai).
+- Kosmetik terkait: teks admin "Periksa MIDTRANS_SERVER_KEY…" diganti "Periksa server key Midtrans…" agar bundle klien bebas nama variabel secret.
+
+### Implementasi P25 — fase 2 (perbaikan review keamanan, laporan: `security-review-2026-11-11.md`)
+- **Refund (M1, OD-28):** lihat BR-19 & payment-architecture §5a.
+- **TOTP (M2/M3, OD-29):** wajib semua role; anti-replay `totp_last_step`; rotasi sesi setelah TOTP aktif; increment gagal login atomik (§2).
+- **Pencarian global admin (M4):** tanpa `donors.export` → email dimasking & hanya cocok persis (sama dengan P22).
+- **Ekspor async (L3):** filter (termasuk kata kunci) disimpan di Redis `tk:export-filters:{exportId}` TTL 2 jam; body QStash hanya `{exportId, adminId, kind, masked}`. Filter kedaluwarsa → job `export.failed` (`filters_expired`).
+- **Buat/ganti metode pembayaran (L6):** rate limit `create-payment-trx` 10/jam per transaksi + `create-payment-ip` 30/jam per IP, sebelum charge Midtrans. **Fail-closed** di preview/production bila Redis gagal (sama dengan lock pembayaran — setiap percobaan membuat charge di provider; transaksi tetap bisa dibayar dengan instruksi yang sudah ada), fail-open hanya `APP_ENV=development`.
+- **Checkout (L5, OD-31):** rate limit tambahan `checkout-phone` 5/jam per nomor WA (fail-open seperti limit checkout lain, OD-15); WA transaksi tamu hanya untuk `payment.paid`; `neutraliseDonorName` membuang URL/domain dari `{{donor_name}}`.
+- **Hapus akun (L7):** lihat database-security.md §6; doa tetap (OD-33 terbuka).
+- **APP_ENV (L8):** `env.ts` menolak `APP_ENV` kosong/`development` bila `VERCEL_ENV` = `preview`/`production` (deployment Vercel wajib `APP_ENV=preview|production`). Lokal, test, CI, dan Lighthouse (tanpa `VERCEL_ENV`) tidak terpengaruh.
+- **Log (L11):** semua log error memakai `safeError()` (`src/lib/safe-error.ts`: nama kelas + kode saja); tidak ada `String(error)`/`error.message` di log (termasuk logger Auth.js).
+- **403 admin (L2):** proxy mengecek permission halaman admin (`src/lib/admin-auth/page-permissions.ts`, satu query sesi+role) dan me-rewrite ke `/akses-ditolak` dengan **HTTP 403** sebelum streaming; halaman tetap memanggil `requireAdmin(permission)`. Error DB → fail-open ke halaman (UI 403 status 200 seperti sebelumnya). Tabel diuji terhadap kode halaman (`tests/unit/admin-page-permissions.test.ts`).
+- **IP klien (I1):** `src/lib/http/client-ip.ts` — `x-vercel-forwarded-for` → entri pertama `x-forwarded-for` → `x-real-ip`, divalidasi `isIP`. Di luar Vercel header ini bisa dipalsukan (deployment selain Vercel wajib menimpa header di proxy depan).
+- **Upload admin (I4):** `requireAdminApi([...])` → 401/403 JSON.
+

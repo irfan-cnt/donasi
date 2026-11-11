@@ -138,6 +138,8 @@ export function buildChargeBody(input: CreatePaymentInput, now: Date): Record<st
 export interface MappedStatus {
   status: PaymentStatus;
   needsReview: boolean;
+  /** Midtrans `partial_refund` (P25): jangan kurangi total — butuh review. */
+  partialRefund?: boolean;
 }
 
 /**
@@ -168,8 +170,10 @@ export function mapTransactionStatus(
     case "cancel":
       return { status: "cancelled", needsReview: false };
     case "refund":
-    case "partial_refund":
       return { status: "refunded", needsReview: true };
+    // P25 (OD-28): nominal refund parsial tidak diketahui sistem → tidak pernah diterapkan.
+    case "partial_refund":
+      return { status: "refunded", needsReview: true, partialRefund: true };
     default:
       throw new MidtransError("unmapped_status", `transaction_status ${ts || "(kosong)"}`);
   }

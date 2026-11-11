@@ -69,7 +69,7 @@ Registry: `getProvider(code)` membaca konfigurasi env; provider tanpa kredensial
 | getPaymentStatus | `GET {base}/v2/{order_id}/status` |
 | verifyWebhook | `signature_key == SHA512(order_id + status_code + gross_amount + SERVER_KEY)`; lalu **cross-check** `getPaymentStatus` |
 | expirePayment | `POST {base}/v2/{order_id}/expire` (407 = berhasil; 404/412 = sudah final → cek status) |
-| Mapping status | `settlement`/`capture(accept)` → paid; `capture(challenge)` → pending + `needsReview`; `capture(deny)`/`deny`/`failure` → failed; `pending` → pending; `expire` → expired; `cancel` → cancelled; `refund`/`partial_refund` → refunded (dicatat, `needsReview`, tanpa otomatisasi); lainnya (`authorize`, `chargeback`, …) → error `unmapped_status` (tidak diterapkan) |
+| Mapping status | `settlement`/`capture(accept)` → paid; `capture(challenge)` → pending + `needsReview`; `capture(deny)`/`deny`/`failure` → failed; `pending` → pending; `expire` → expired; `cancel` → cancelled; `refund` → refunded (`needsReview`; diterapkan + total dikurangi hanya via cek status admin, P25); `partial_refund` → refunded + `partialRefund` (tidak diterapkan, `needs_review`); lainnya (`authorize`, `chargeback`, …) → error `unmapped_status` (tidak diterapkan) |
 | Base URL | sandbox `https://api.sandbox.midtrans.com`, prod `https://api.midtrans.com` |
 
 ### 3a. Implementasi Midtrans (P10, T-23) — `src/lib/payments/midtrans/`
@@ -143,7 +143,7 @@ stateDiagram-v2
   pending --> expired: expiry + provider check
   pending --> failed: provider failure
   pending --> cancelled: ganti metode / batal
-  paid --> refunded: (masa depan, manual)
+  paid --> refunded: refund penuh, cek status admin (P25)
   paid --> [*]
 ```
 
@@ -185,6 +185,7 @@ Kunci idempotensi:
 - `applyVerifiedStatus(tx, {paymentId, status, amount, paidAt, source, eventId, providerRef?})` dipanggil di dalam `getTxDb().transaction()` (driver WebSocket Pool; HTTP driver tidak mendukung transaksi interaktif). `source` ∈ `webhook | expiry_job | reconcile | admin_check`. `eventId` = `payment_events.id` milik event webhook (opsional).
 - Urutan: `SELECT ... FROM payments WHERE id = $1 FOR UPDATE` → unknown → nominal (`paid` tanpa nominal juga dianggap `amount_mismatch`) → status sama = `duplicate` → `canTransition` → `UPDATE payments` → turunkan status transaksi.
 - `paid`: `UPDATE transactions SET status='paid' ... WHERE id=$1 AND status NOT IN ('paid','refunded') RETURNING` (guard BR-19 diperluas agar transaksi `refunded` tidak kembali paid). Hanya bila baris kembali: `campaigns` += amount/1 dan nomor kuitansi `KW/YYYY/NNNNNN` dari `INSERT INTO receipt_counters ... ON CONFLICT (year) DO UPDATE SET last_seq = last_seq + 1 RETURNING last_seq` (YYYY = tahun `paid_at` Asia/Jakarta; upsert agar tahun baru tidak gagal).
+- **Refund (P25, OD-28):** `refund` dari Get Status hanya diterapkan untuk `source = admin_check` (sumber lain → `ignored_transition` + alert). Midtrans `partial_refund` dipetakan `refunded` + `partialRefund` → **tidak diterapkan** (`ignored_transition`, audit `payment.needs_review`, alert `refund_reported`) karena sistem tidak punya nominal refund parsial. Refund penuh: `UPDATE transactions SET status='refunded' WHERE id=$1 AND status='paid' RETURNING amount, campaign_id`; hanya bila baris kembali → `UPDATE campaigns SET collected_amount = collected_amount - amount, donor_count = donor_count - 1` + audit `campaign.total_reversed` (aktor system, metadata amount/sumber). Baris payment terkunci `FOR UPDATE`, jadi pemanggilan paralel → satu pengurangan; CHECK `collected_amount >= 0`/`donor_count >= 0` (migrasi 0003) menggagalkan transaksi bila data tidak konsisten. Kuitansi yang sudah terbit tidak dihapus (BR-28).
 - Status non-paid diturunkan ke transaksi hanya bila transisi transaksi legal (`TRANSACTION_TRANSITIONS`) dan tidak ada attempt lain yang `pending/paid`. Transaksi boleh `expired/failed/cancelled → pending` (attempt baru, BR-11).
 - **Anomali** (tidak melempar; ikut ter-commit): `payment_events.result` (`unknown_payment`, `amount_mismatch`, `ignored_transition`) — update event webhook bila `eventId` ada, selain itu baris baru `event_type = internal.<source>`; plus `audit_logs` (actor `system`, entity `payment`) aksi `payment.amount_mismatch`, `payment.unknown_payment`, `payment.ignored_transition`, `payment.needs_review` (uang masuk ke payment yang sudah expired/cancelled atau transaksi sudah paid lewat payment lain — BR-17), dan log JSON terstruktur.
 - **Alert admin internal:** hasil fungsi berisi `alert` (`amount_mismatch | paid_after_terminal | unknown_payment | refund_reported | needs_review`). Pengiriman email admin belum ada (P16): P16 mengirim `alert` ini ke `EMAIL_ADMIN_ALERT` setelah commit dan dapat memindai `audit_logs` aksi `payment.*` sebagai cadangan.
