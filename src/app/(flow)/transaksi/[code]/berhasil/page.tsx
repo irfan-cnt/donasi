@@ -1,6 +1,7 @@
 import { CheckCircle2, Download, LogIn } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
 import { notFound, redirect } from "next/navigation";
 import { FlowLayout } from "@/components/public/flow-layout";
 import { TrackPaidView } from "@/components/shared/donation-tracking";
@@ -24,6 +25,7 @@ export const metadata: Metadata = {
 
 export default async function SuccessPage({ params, searchParams }: PageProps<"/transaksi/[code]/berhasil">) {
   const [{ code }, query] = await Promise.all([params, searchParams]);
+  await connection(); // per request: waktu & koneksi DB tidak boleh jalan saat prerender
   const parsed = transactionPageInput.safeParse({ code, t: query.t });
   if (!parsed.success) notFound();
   const view = await getTransactionView(parsed.data.code, parsed.data.t);

@@ -1,6 +1,7 @@
 import { Hourglass, Mail, XCircle } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
 import { notFound, redirect } from "next/navigation";
 import { FlowLayout } from "@/components/public/flow-layout";
 import { StatusPoller } from "@/components/public/transaction/status-poller";
@@ -25,6 +26,7 @@ export const metadata: Metadata = {
 
 export default async function PendingPage({ params, searchParams }: PageProps<"/transaksi/[code]/menunggu">) {
   const [{ code }, query] = await Promise.all([params, searchParams]);
+  await connection(); // per request: waktu & koneksi DB tidak boleh jalan saat prerender
   if (query.t === undefined) {
     if (!TRANSACTION_CODE_PATTERN.test(code)) notFound();
     return <GenericPending />;

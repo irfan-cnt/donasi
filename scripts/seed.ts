@@ -307,8 +307,7 @@ async function seedSample(tx: Tx) {
     );
   const txId = new Map(txRows.map((t) => [t.code, t.id]));
 
-  // Payment (maks. satu per transaksi; `created` tanpa payment) + event sintetis.
-  const now = Date.now();
+  // Payment (maks. satu per transaksi; `created`/`pending` tanpa payment — hasSamplePayment) + event sintetis.
   const withPayment = txs.filter((t) => t.methodCode !== null);
   for (const part of chunk(withPayment)) {
     await tx
@@ -327,11 +326,9 @@ async function seedSample(tx: Tx) {
             instruction: isVa
               ? { bank: m.providerChannel, va_number: `8800${t.code.slice(-6)}`, sample: true }
               : { qr_string: `SAMPLE-QR-${t.code}`, sample: true },
-            // Pending: kedaluwarsa di masa depan agar tampil sebagai "menunggu" di UI dev.
-            expiresAt:
-              t.status === "pending"
-                ? new Date(now + 24 * 3_600_000)
-                : new Date(t.createdAt.getTime() + m.expiryMinutes * 60_000),
+            // Hanya status final (hasSamplePayment): tidak ada payment contoh yang bisa dipilih
+            // job expire-payments/reconcile (tidak pernah ada di Midtrans → 404 storm).
+            expiresAt: new Date(t.createdAt.getTime() + m.expiryMinutes * 60_000),
             paidAt: t.paidAt,
             failureReason: t.status === "failed" ? "Ditolak oleh penerbit (contoh)" : null,
             createdAt: t.createdAt,
@@ -381,7 +378,6 @@ async function seedSample(tx: Tx) {
       processedAt: at,
     });
     const first = base(1, "pending", new Date(t.createdAt.getTime() + 5_000));
-    if (t.status === "pending") return [first];
     const endAt = t.paidAt ?? new Date(t.createdAt.getTime() + 3_600_000);
     return [first, base(2, midtransStatus[t.status]!, endAt)];
   });

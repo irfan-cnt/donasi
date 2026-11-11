@@ -61,7 +61,7 @@ test("detail published: konten, CTA, JSON-LD, canonical, OG, tanpa error konsol"
     "href",
     new RegExp(`/campaign/${PUBLISHED}$`),
   );
-  await expect(page.locator('meta[property="og:image"]').first()).toHaveAttribute("content", /placeholder|blob/);
+  await expect(page.locator('meta[property="og:image"]').first()).toHaveAttribute("content", /images\/sample\/|blob/);
   await expect(page.locator(".prose-tk script")).toHaveCount(0);
   expect(errors).toEqual([]);
 });

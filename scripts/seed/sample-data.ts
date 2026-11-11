@@ -266,6 +266,17 @@ export const TX_STATUS_COUNTS: Record<TxStatus, number> = {
   refunded: 5,
 };
 
+/**
+ * Hanya transaksi berstatus final yang punya baris `payments` contoh. `created` & `pending` tidak:
+ * payment `pending`/`created` contoh tidak pernah ada di Midtrans, jadi job expire-payments /
+ * reconcile akan menanyakannya, mendapat 404 untuk semuanya, dan memicu `provider_404_storm`
+ * (payment-architecture.md §Seed). Transaksi `pending` tetap ada untuk tampilan admin/dashboard
+ * (tanpa payment aktif → dilewati job P11 karena tidak ada attempt terminal).
+ */
+export function hasSamplePayment(status: TxStatus): boolean {
+  return status !== "created" && status !== "pending";
+}
+
 export type SampleTransaction = {
   code: string;
   campaignSlug: string;
@@ -328,23 +339,28 @@ export function buildSampleTransactions(seed = 20261110): SampleTransaction[] {
     } else {
       amount = rng.pick(OPEN_AMOUNTS);
     }
-    const hasPayment = status !== "created";
     const paidAt =
       status === "paid" || status === "refunded"
         ? new Date(createdAt.getTime() + 60_000 + rng.int(3 * 3_600_000))
         : null;
+    // Urutan konsumsi RNG dipertahankan (metode tetap diundi untuk `pending`) agar kode & data
+    // transaksi lain identik dengan seed sebelumnya (onConflictDoNothing per kode).
+    const donorKey = 1 + rng.int(40);
+    const isAnonymous = rng.int(5) === 0;
+    const prayer = rng.int(3) === 0 ? rng.pick(PRAYERS) : null;
+    const method = status === "created" ? null : rng.pick(PAYMENT_METHODS).code;
     return {
       code,
       campaignSlug: campaign.slug,
-      donorKey: 1 + rng.int(40),
+      donorKey,
       amount,
       optionIndex,
       status,
       createdAt,
       paidAt,
-      isAnonymous: rng.int(5) === 0,
-      prayer: rng.int(3) === 0 ? rng.pick(PRAYERS) : null,
-      methodCode: hasPayment ? rng.pick(PAYMENT_METHODS).code : null,
+      isAnonymous,
+      prayer,
+      methodCode: hasSamplePayment(status) ? method : null,
       accessTokenHash: createHash("sha256").update(`sample-access:${seed}:${i}`).digest(),
     };
   });

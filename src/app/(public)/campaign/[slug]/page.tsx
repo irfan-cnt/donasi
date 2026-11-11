@@ -8,6 +8,13 @@ import { normalizeSlug } from "@/lib/slug";
 import { getPublicCampaignDetail } from "@/server/queries/public-campaign-detail";
 import { getSitemapCampaigns } from "@/server/queries/public-campaigns";
 
+// Rute blocking pada `params` (instant.md "Disabling instant"): slug tak dikenal/draft harus
+// menjadi 404 sungguhan (e2e campaign-detail), sedangkan `params` di dalam <Suspense> membuat
+// respons 200 + noindex (soft 404). Slug di generateStaticParams tetap diprerender penuh saat
+// build/ISR, jadi H1 & konten tetap ada di HTML awal. Data campaign sendiri di-cache dengan
+// stale ≥ 300 s (public-campaign-detail.ts) sehingga tidak lagi dilaporkan sebagai "uncached data".
+export const instant = false;
+
 // Slug huruf besar sudah di-redirect 301 oleh src/proxy.ts; di sini slug tidak kanonik → 404.
 async function load(rawSlug: string) {
   const slug = normalizeSlug(rawSlug);

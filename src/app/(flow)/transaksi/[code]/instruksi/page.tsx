@@ -1,6 +1,7 @@
 import { ChevronDown, Clock, Download, ExternalLink, RefreshCw, TimerOff, XCircle } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
 import { notFound, redirect } from "next/navigation";
 import { EmptyState } from "@/components/public/empty-state";
 import { FlowLayout } from "@/components/public/flow-layout";
@@ -33,6 +34,7 @@ export default async function InstructionPage({
   searchParams,
 }: PageProps<"/transaksi/[code]/instruksi">) {
   const [{ code }, query] = await Promise.all([params, searchParams]);
+  await connection(); // per request: waktu & koneksi DB tidak boleh jalan saat prerender
   const parsed = transactionPageInput.safeParse({ code, t: query.t });
   if (!parsed.success) notFound();
   const { t } = parsed.data;

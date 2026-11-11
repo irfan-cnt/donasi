@@ -13,6 +13,10 @@ import { SITE_NAME, siteUrl } from "@/lib/site";
 import { normalizeSlug } from "@/lib/slug";
 import { getPublicNewsDetail, getRecentNewsParams } from "@/server/queries/public-campaign-detail";
 
+// Rute blocking pada `params` agar berita draft/tak dikenal → 404 sungguhan (lihat catatan di
+// ../../page.tsx); slug dari generateStaticParams tetap diprerender penuh.
+export const instant = false;
+
 type Props = PageProps<"/campaign/[slug]/berita/[newsSlug]">;
 
 async function load(params: Props["params"]) {

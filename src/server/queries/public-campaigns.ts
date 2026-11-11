@@ -17,7 +17,10 @@ import {
 export const CAMPAIGNS_TAG = "campaigns";
 export const campaignTag = (slug: string) => `campaign:${slug}`;
 
-const ISR_LIFE = { stale: 60, revalidate: 60, expire: 3600 } as const;
+// stale ≥ 300 s: syarat konten cache masuk App Shell (Partial Prefetching) — di bawah itu Next.js
+// memperlakukannya sebagai data tak ter-cache di shell & validasi instant dev menandai "Blocking Route".
+// `stale` hanya umur cache router klien; kesegaran server tetap diatur `revalidate` + tag.
+const ISR_LIFE = { stale: 300, revalidate: 60, expire: 3600 } as const;
 
 export interface PublicCategory {
   slug: string;
@@ -129,7 +132,7 @@ export async function getPublicCategories(): Promise<PublicCategory[]> {
 /** Statistik platform (cache Redis 5 menit). Hanya agregat, tanpa data donor. */
 export async function getPlatformStats(): Promise<PlatformStats> {
   "use cache";
-  cacheLife({ stale: 60, revalidate: 300, expire: 3600 });
+  cacheLife({ stale: 300, revalidate: 300, expire: 3600 }); // stale ≥ 300 s → masuk App Shell
   cacheTag(CAMPAIGNS_TAG, "platform-stats");
   return cachedJson(
     "platform-stats:v1",

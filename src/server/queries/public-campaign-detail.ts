@@ -17,7 +17,10 @@ import { CAMPAIGNS_TAG, campaignTag } from "./public-campaigns";
 // Data publik detail campaign & berita. TIDAK PERNAH memilih kolom email/telepon donatur:
 // daftar donasi hanya nama tampil (snapshot / "Hamba Allah"), doa, dan waktu (AC-02.4).
 
-const ISR_LIFE = { stale: 60, revalidate: 60, expire: 3600 } as const;
+// stale ≥ 300 s: syarat konten cache masuk App Shell (Partial Prefetching) — di bawah itu Next.js
+// memperlakukannya sebagai data tak ter-cache di shell & validasi instant dev menandai "Blocking Route".
+// `stale` hanya umur cache router klien; kesegaran server tetap diatur `revalidate` + tag.
+const ISR_LIFE = { stale: 300, revalidate: 60, expire: 3600 } as const;
 const PUBLIC_STATUSES = ["published", "paused", "completed"] as const;
 const PLACEHOLDER = "/images/sample/placeholder.svg";
 

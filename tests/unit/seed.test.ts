@@ -18,9 +18,12 @@ import {
   assignReceiptNumbers,
   buildSampleDonors,
   buildSampleNews,
+  SAMPLE_ANCHOR,
   buildSampleTransactions,
+  hasSamplePayment,
   paidTotalsByCampaign,
 } from "../../scripts/seed/sample-data";
+import { RECONCILE_WINDOW_HOURS } from "@/server/services/jobs/reconcile";
 
 describe("parseSeedMode", () => {
   it("default reference", () => expect(parseSeedMode([])).toBe("reference"));
@@ -122,11 +125,31 @@ describe("sample data", () => {
       expect(isTransactionCode(t.code)).toBe(true);
       expect(t.amount).toBeGreaterThanOrEqual(1000n);
       expect(t.paidAt !== null).toBe(t.status === "paid" || t.status === "refunded");
-      expect(t.methodCode === null).toBe(t.status === "created");
+      expect(t.methodCode === null).toBe(t.status === "created" || t.status === "pending");
       expect(SAMPLE_CAMPAIGNS.find((c) => c.slug === t.campaignSlug)!.status).not.toBe("draft");
     }
     for (const [status, n] of Object.entries(TX_STATUS_COUNTS)) {
       expect(a.filter((t) => t.status === status)).toHaveLength(n);
+    }
+  });
+  it("tidak ada payment contoh yang bisa dipilih job expire-payments/reconcile (404 storm)", () => {
+    const txs = buildSampleTransactions();
+    // Transaksi pending tetap ada untuk tampilan admin/dashboard, tetapi tanpa payment.
+    expect(txs.filter((t) => t.status === "pending")).toHaveLength(TX_STATUS_COUNTS.pending);
+    const withPayment = txs.filter((t) => t.methodCode !== null);
+    expect(withPayment.length).toBeGreaterThan(0);
+    const maxExpiryMs = Math.max(...PAYMENT_METHODS.map((m) => m.expiryMinutes)) * 60_000;
+    // Jendela kandidat reconcile (created/updated 48 jam) dihitung dari waktu nyata; data contoh
+    // berlabuh pada SAMPLE_ANCHOR yang tetap, jadi cukup dipastikan semuanya ≤ anchor + jitter.
+    const latestAllowed = SAMPLE_ANCHOR.getTime() + maxExpiryMs + 4 * 3_600_000;
+    expect(latestAllowed + RECONCILE_WINDOW_HOURS * 3_600_000).toBeLessThan(Date.now());
+    for (const t of withPayment) {
+      expect(hasSamplePayment(t.status)).toBe(true);
+      // expire-payments hanya memilih payments.status = 'pending'; reconcile melewati `created`
+      // baru — keduanya tidak pernah ada di data contoh.
+      expect(["pending", "created"]).not.toContain(t.status);
+      expect(t.createdAt.getTime() + maxExpiryMs).toBeLessThanOrEqual(latestAllowed);
+      expect((t.paidAt ?? t.createdAt).getTime()).toBeLessThanOrEqual(latestAllowed);
     }
   });
   it("kuitansi berurutan untuk paid; total paid per campaign", () => {

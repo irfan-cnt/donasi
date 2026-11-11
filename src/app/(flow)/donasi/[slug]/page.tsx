@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 import { CheckoutForm, type CheckoutPrefill } from "@/components/public/checkout-form";
 import { FlowLayout } from "@/components/public/flow-layout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -34,6 +35,7 @@ async function loadPrefill(): Promise<CheckoutPrefill | null> {
 
 export default async function CheckoutPage({ params }: PageProps<"/donasi/[slug]">) {
   const { slug } = await params;
+  await connection(); // per request: koneksi DB (crypto acak) tidak boleh jalan saat prerender
   const [view, prefill] = await Promise.all([getCheckoutView(slug), loadPrefill()]);
   if (!view) notFound();
   const { campaign: c } = view;

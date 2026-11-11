@@ -36,7 +36,7 @@ export function toOrganizationContact(rows: { key: string; value: unknown }[]): 
 
 export async function getOrganizationContact(): Promise<OrganizationContact> {
   "use cache";
-  cacheLife({ stale: 60, revalidate: 300, expire: 3600 });
+  cacheLife({ stale: 300, revalidate: 300, expire: 3600 }); // stale ≥ 300 s → masuk App Shell
   cacheTag("platform-settings");
   const rows = await getDb()
     .select({ key: platformSettings.key, value: platformSettings.value })
