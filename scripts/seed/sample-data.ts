@@ -34,6 +34,8 @@ export type SampleCampaign = {
   targetAmount: bigint | null;
   status: "draft" | "published" | "paused" | "completed";
   isFeatured: boolean;
+  /** Gambar contoh di public/images/sample; tanpa ini dipakai placeholder. */
+  image?: { url: string; alt: string };
   /** Paket (fixed) atau saran nominal (open). */
   options: { label: string | null; amount: bigint }[];
 };
@@ -83,6 +85,10 @@ export const SAMPLE_CAMPAIGNS: SampleCampaign[] = [
   },
   {
     slug: "contoh-renovasi-masjid-desa",
+    image: {
+      url: "/images/sample/masjid-pelosok.webp",
+      alt: "Perbandingan bangunan masjid di pelosok sebelum dan sesudah dibangun",
+    },
     categorySlug: "masjid",
     title: "Renovasi Atap Masjid Desa yang Rusak Diterpa Hujan",
     shortDescription: "Atap masjid bocor di banyak titik; jamaah kesulitan salat saat hujan turun.",
@@ -94,6 +100,10 @@ export const SAMPLE_CAMPAIGNS: SampleCampaign[] = [
   },
   {
     slug: "contoh-dana-darurat-kemanusiaan",
+    image: {
+      url: "/images/sample/tanggap-bencana.webp",
+      alt: "Relawan membawa bantuan logistik menuju lokasi bencana",
+    },
     categorySlug: "kemanusiaan",
     title: "Dana Darurat Kemanusiaan untuk Bantuan Cepat",
     shortDescription: "Dana siaga untuk merespons kebutuhan darurat kemanusiaan secara cepat.",
