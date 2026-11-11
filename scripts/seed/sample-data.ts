@@ -45,6 +45,10 @@ const SUGGESTED = [25_000n, 50_000n, 100_000n, 250_000n].map((amount) => ({ labe
 export const SAMPLE_CAMPAIGNS: SampleCampaign[] = [
   {
     slug: "contoh-beasiswa-santri-penghafal-quran",
+    image: {
+      url: "/images/sample/masjid-pelosok.webp",
+      alt: "Perbandingan bangunan masjid di pelosok sebelum dan sesudah dibangun",
+    },
     categorySlug: "pendidikan",
     title: "Beasiswa Santri Penghafal Al-Qur'an di Pelosok Negeri",
     shortDescription:
@@ -57,6 +61,10 @@ export const SAMPLE_CAMPAIGNS: SampleCampaign[] = [
   },
   {
     slug: "contoh-sedekah-subuh-harian",
+    image: {
+      url: "/images/sample/masjid-pelosok.webp",
+      alt: "Perbandingan bangunan masjid di pelosok sebelum dan sesudah dibangun",
+    },
     categorySlug: "lainnya",
     title: "Sedekah Subuh Harian untuk Kebaikan Bersama",
     shortDescription:
@@ -69,6 +77,10 @@ export const SAMPLE_CAMPAIGNS: SampleCampaign[] = [
   },
   {
     slug: "contoh-paket-sembako-dhuafa",
+    image: {
+      url: "/images/sample/tanggap-bencana.webp",
+      alt: "Relawan membawa bantuan logistik menuju lokasi bencana",
+    },
     categorySlug: "yatim-dhuafa",
     title: "Paket Sembako untuk Keluarga Dhuafa dan Lansia",
     shortDescription:
@@ -115,6 +127,10 @@ export const SAMPLE_CAMPAIGNS: SampleCampaign[] = [
   },
   {
     slug: "contoh-paket-hygiene-korban-banjir",
+    image: {
+      url: "/images/sample/tanggap-bencana.webp",
+      alt: "Relawan membawa bantuan logistik menuju lokasi bencana",
+    },
     categorySlug: "bencana-alam",
     title: "Paket Kebersihan untuk Pengungsi Korban Banjir",
     shortDescription:
@@ -130,6 +146,10 @@ export const SAMPLE_CAMPAIGNS: SampleCampaign[] = [
   },
   {
     slug: "contoh-ambulans-gratis-dhuafa",
+    image: {
+      url: "/images/sample/tanggap-bencana.webp",
+      alt: "Relawan membawa bantuan logistik menuju lokasi bencana",
+    },
     categorySlug: "kesehatan",
     title: "Pengadaan Ambulans Gratis untuk Warga Dhuafa",
     shortDescription:
@@ -142,6 +162,10 @@ export const SAMPLE_CAMPAIGNS: SampleCampaign[] = [
   },
   {
     slug: "contoh-paket-pangan-palestina",
+    image: {
+      url: "/images/sample/tanggap-bencana.webp",
+      alt: "Relawan membawa bantuan logistik menuju lokasi bencana",
+    },
     categorySlug: "palestina",
     title: "Paket Pangan Keluarga untuk Saudara di Palestina",
     shortDescription: "Paket pangan siap saji untuk keluarga terdampak krisis kemanusiaan.",
