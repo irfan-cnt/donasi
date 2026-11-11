@@ -45,7 +45,7 @@ export function LandingFloating() {
             const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
             window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
           }}
-          className="fixed right-4 bottom-[92px] z-30 flex size-[46px] animate-lp-rise items-center justify-center rounded-2xl bg-primary text-white shadow-[0_16px_32px_-14px_rgba(6,68,38,.8)] transition-[background-color,transform] duration-150 hover:-translate-y-0.5 hover:bg-primary-hover motion-reduce:animate-none sm:right-6 sm:bottom-6 sm:size-[50px]"
+          className="fixed right-4 bottom-[calc(92px+env(safe-area-inset-bottom,0px))] z-30 flex size-[46px] animate-lp-rise items-center justify-center rounded-2xl bg-primary text-white shadow-[0_16px_32px_-14px_rgba(6,68,38,.8)] transition-[background-color,transform] duration-150 hover:-translate-y-0.5 hover:bg-primary-hover motion-reduce:animate-none sm:right-6 sm:bottom-6 sm:size-[50px]"
         >
           <ArrowUp className="size-[22px]" aria-hidden />
         </button>

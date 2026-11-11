@@ -223,6 +223,9 @@
 
   --background: rgb(var(--tk-bg));
   --foreground: rgb(var(--tk-ink));
+  --card-foreground: rgb(var(--tk-ink));
+  --popover-foreground: rgb(var(--tk-ink));
+  --destructive: rgb(var(--tk-danger));
   --primary: rgb(var(--tk-primary));
   --secondary: rgb(var(--tk-primary-soft));
   --secondary-foreground: rgb(var(--tk-primary-ink));

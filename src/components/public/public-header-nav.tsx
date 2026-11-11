@@ -88,7 +88,7 @@ export function PublicHeaderNav({ account }: { account: ReactNode }) {
             <Link
               key={item.id}
               href={item.href}
-              aria-current={on ? "true" : undefined}
+              aria-current={on ? (isHome ? "location" : "page") : undefined}
               className={cn(
                 "relative rounded-full px-3.5 py-2.5 text-[14.5px] font-semibold transition-colors hover:bg-[#EEF4EF] hover:text-primary",
                 on
@@ -131,7 +131,7 @@ export function PublicHeaderNav({ account }: { account: ReactNode }) {
                 <Link
                   key={item.id}
                   href={item.href}
-                  aria-current={on ? "true" : undefined}
+                  aria-current={on ? (isHome ? "location" : "page") : undefined}
                   onClick={() => setOpen(false)}
                   className={cn(
                     "flex min-h-[52px] items-center justify-between rounded-xl px-3.5 text-[17px] font-bold transition-colors hover:bg-[#F4F8F5] hover:text-primary",
